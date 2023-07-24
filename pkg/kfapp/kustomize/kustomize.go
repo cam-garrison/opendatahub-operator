@@ -1075,6 +1075,8 @@ func MergeKustomization(compDir string, targetDir string, kfDef *kfconfig.KfConf
 		patchJson.Path = extractSuffix(compDir, patchAbsolutePath)
 		// patchJson.Path can be used for multiple targets, hence kustomizationMaps key is patchJson.Path+"-"+patchJson.Target.Name"
 		patchJsonMapKey := patchJson.Path + "-" + patchJson.Target.Name
+		log.Infof("patchJson.Target = %s, patchJson.Path = %s, patchJsonMapKey=%s", patchJson.Target, patchJson.Path, patchJsonMapKey)
+		log.Infof("whole patch = %s\n", patchJson)
 		if _, ok := kustomizationMaps[patchesJson6902Map][patchJsonMapKey]; !ok {
 			parent.PatchesJson6902 = append(parent.PatchesJson6902, *patchJson)
 			kustomizationMaps[patchesJson6902Map][patchJsonMapKey] = true

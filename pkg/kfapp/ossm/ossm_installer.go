@@ -3,7 +3,7 @@ package ossm
 import (
 	"context"
 	"fmt"
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-multierror"
 	kfapisv3 "github.com/opendatahub-io/opendatahub-operator/apis"
 	kftypesv3 "github.com/opendatahub-io/opendatahub-operator/apis/apps"
 	"github.com/opendatahub-io/opendatahub-operator/apis/ossm.plugins.kubeflow.org/v1alpha1"
@@ -76,6 +76,10 @@ func (o *OssmInstaller) Init(_ kftypesv3.ResourceEnum) error {
 
 	if valid, reason := pluginSpec.IsValid(); !valid {
 		return internalError(errors.New(reason))
+	}
+
+	if err := o.AddSMOverlays(); err != nil {
+		return internalError(err)
 	}
 
 	// TODO ensure operators are installed
@@ -214,6 +218,24 @@ func (o *OssmInstaller) MigrateDSProjects() error {
 	}
 
 	return result.ErrorOrNil()
+}
+
+func (o *OssmInstaller) AddSMOverlays() error {
+	// Adding overlays to necessary applications.
+	// If the app already has the overlay, it ignores it gracefully.
+	err := o.KfConfig.AddApplicationOverlay("odh-dashboard", "service-mesh")
+	if err != nil {
+		log.Error(err, "error when adding odh-dash sm overlay")
+		return err
+	}
+	// TODO: figure out why sm overlay fails for dashboard patches
+	// TODO: handle errors and add log statements for successes.
+	err = o.KfConfig.AddApplicationOverlay("odh-notebook-controller", "service-mesh")
+	if err != nil {
+		log.Error(err, "error when adding odh-nb-ctrlr sm overlay")
+		return err
+	}
+	return nil
 }
 
 func internalError(err error) error {
