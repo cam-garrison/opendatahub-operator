@@ -28,7 +28,7 @@ type Feature struct {
 	DynamicClient dynamic.Interface
 	Client        client.Client
 
-	manifests []manifest
+	manifests []Manifest
 
 	cleanups       []Action
 	resources      []Action
@@ -99,7 +99,7 @@ func (f *Feature) Apply() (err error) {
 
 	phase = featurev1.ProcessTemplates
 	for i := range f.manifests {
-		if err := f.manifests[i].process(f.Spec); err != nil {
+		if err := f.manifests[i].Process(f.Spec); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -141,7 +141,12 @@ func (f *Feature) Cleanup() error {
 func (f *Feature) applyManifests() error {
 	var applyErrors *multierror.Error
 	for _, m := range f.manifests {
-		applyErrors = multierror.Append(applyErrors, f.apply(m))
+		applyErrors = multierror.Append(applyErrors, m.Apply(f.Client, f.DynamicClient, func(obj metav1.Object) error {
+			obj.SetOwnerReferences([]metav1.OwnerReference{
+				f.AsOwnerReference(),
+			})
+			return nil
+		}))
 	}
 
 	return applyErrors.ErrorOrNil()
@@ -180,35 +185,6 @@ func (f *Feature) CreateConfigMap(cfgMapName string, data map[string]string) err
 
 func (f *Feature) addCleanup(cleanupFuncs ...Action) {
 	f.cleanups = append(f.cleanups, cleanupFuncs...)
-}
-
-type apply func(data string) error
-
-func (f *Feature) apply(m manifest) error {
-	var applier apply
-	targetPath := m.targetPath()
-
-	if m.patch {
-		applier = func(data string) error {
-			f.Log.Info("patching using manifest", "feature", f.Name, "name", m.name, "path", targetPath)
-
-			return f.patchResources(data)
-		}
-	} else {
-		applier = func(data string) error {
-			f.Log.Info("applying manifest", "feature", f.Name, "name", m.name, "path", targetPath)
-
-			return f.createResources(data)
-		}
-	}
-
-	if err := applier(m.processedContent); err != nil {
-		f.Log.Error(err, "failed to create resource", "feature", f.Name, "name", m.name, "path", targetPath)
-
-		return err
-	}
-
-	return nil
 }
 
 func (f *Feature) AsOwnerReference() metav1.OwnerReference {

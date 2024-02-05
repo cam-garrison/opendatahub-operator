@@ -95,7 +95,7 @@ func createClients(config *rest.Config) partialBuilder {
 func (fb *featureBuilder) Manifests(paths ...string) *featureBuilder {
 	fb.builders = append(fb.builders, func(f *Feature) error {
 		var err error
-		var manifests []manifest
+		var manifests []Manifest
 
 		for _, path := range paths {
 			manifests, err = loadManifestsFrom(fb.fsys, path)
