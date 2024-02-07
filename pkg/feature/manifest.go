@@ -2,25 +2,23 @@ package feature
 
 import (
 	"bytes"
-	"context"
 	"embed"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	k8stypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/dynamic"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/ghodss/yaml"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/deploy"
 )
 
@@ -36,23 +34,31 @@ var (
 // Manifest defines the interface that all manifest types should implement.
 type Manifest interface {
 	Process(data interface{}) error
-	Open() (fs.File, error)
-	Apply(cli client.Client, dyCli dynamic.Interface, metaOptions ...cluster.MetaOptions) error
+	GetObjs() []*unstructured.Unstructured
+	IsPatch() bool
 }
 
-type baseManifest struct {
+type BaseManifest struct {
 	name,
-	path,
-	content string
+	path string
+	objs  []*unstructured.Unstructured
 	patch bool
 	fsys  fs.FS
 }
 
-// Ensure baseManifest implements the Manifest interface.
-var _ Manifest = (*baseManifest)(nil)
+func (b *BaseManifest) IsPatch() bool {
+	return b.patch
+}
 
-func (b baseManifest) Process(_ interface{}) error {
-	manifestFile, err := b.Open()
+// Ensure BaseManifest implements the Manifest interface.
+var _ Manifest = (*BaseManifest)(nil)
+
+func (b *BaseManifest) GetObjs() []*unstructured.Unstructured {
+	return b.objs
+}
+
+func (b *BaseManifest) Process(_ interface{}) error {
+	manifestFile, err := b.fsys.Open(b.path)
 	if err != nil {
 		return err
 	}
@@ -60,41 +66,34 @@ func (b baseManifest) Process(_ interface{}) error {
 
 	content, err := io.ReadAll(manifestFile)
 	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
+		return fmt.Errorf("failed to read file: %w", err)
 	}
+	resources := string(content)
 
-	b.content = string(content)
+	var objs []*unstructured.Unstructured
+
+	objs, err = convertToUnstructureds(resources, objs)
+	if err != nil {
+		return err
+	}
+	b.objs = objs
 	return nil
-}
-
-func (b baseManifest) Open() (fs.File, error) {
-	return b.fsys.Open(b.path)
-}
-
-func (b baseManifest) Apply(cli client.Client, dyCli dynamic.Interface, metaOptions ...cluster.MetaOptions) error {
-	if b.patch {
-		return patchResources(dyCli, b.content)
-	}
-	return createResources(cli, b.content, metaOptions...)
 }
 
 type templateManifest struct {
 	name,
-	path,
-	processedContent string
+	path string
+	objs  []*unstructured.Unstructured
 	patch bool
 	fsys  fs.FS
 }
 
-func (t templateManifest) Apply(cli client.Client, dyCli dynamic.Interface, metaOptions ...cluster.MetaOptions) error {
-	if t.patch {
-		return patchResources(dyCli, t.processedContent)
-	}
-	return createResources(cli, t.processedContent, metaOptions...)
+func (t *templateManifest) IsPatch() bool {
+	return t.patch
 }
 
-func (t templateManifest) Process(data interface{}) error {
-	manifestFile, err := t.Open()
+func (t *templateManifest) Process(data interface{}) error {
+	manifestFile, err := t.fsys.Open(t.path)
 	if err != nil {
 		return err
 	}
@@ -115,12 +114,19 @@ func (t templateManifest) Process(data interface{}) error {
 		return err
 	}
 
-	t.processedContent = buffer.String()
+	resources := buffer.String()
+	var objs []*unstructured.Unstructured
+
+	objs, err = convertToUnstructureds(resources, objs)
+	if err != nil {
+		return err
+	}
+	t.objs = objs
 	return nil
 }
 
-func (t templateManifest) Open() (fs.File, error) {
-	return t.fsys.Open(t.path)
+func (t *templateManifest) GetObjs() []*unstructured.Unstructured {
+	return t.objs
 }
 
 // Ensure templateManifest implements the Manifest interface.
@@ -128,65 +134,42 @@ var _ Manifest = (*templateManifest)(nil)
 
 type kustomizeManifest struct {
 	name,
-	path string
+	path string // path is to the directory containing a kustomization.yaml file within it.
+	objs []*unstructured.Unstructured
+	fsys filesys.FileSystem // todo: decide if we want to keep - helpful for mocking fs in testing.
 }
 
-func (k kustomizeManifest) Apply(cli client.Client, _ dynamic.Interface, metaOptions ...cluster.MetaOptions) error {
-	// TODO: currently am recycling code from deploy.DeployManifestsFromPath
-	// todo: determine if we should be calling it instead.
-	// calling it directly is awkward since it takes in the namespace, component name etc.
-	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-	fsys := filesys.MakeFsOnDisk()
-	// Create resmap
-	// Use kustomization file under manifestPath or use `default` overlay
+func (k *kustomizeManifest) IsPatch() bool {
+	return false
+}
 
-	// todo: make sure passing kustomization path not dir path works.
+func (k *kustomizeManifest) Process(_ interface{}) error {
+	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
+	// Create resmap
+	// Use kustomization file under manifest path
+
 	var resMap resmap.ResMap
-	resMap, resErr := kustomizer.Run(fsys, k.path)
+	resMap, resErr := kustomizer.Run(k.fsys, k.path)
 
 	if resErr != nil {
 		return fmt.Errorf("error during resmap resources: %w", resErr)
 	}
 
+	// todo: here - decide if we need the add labels / replace ns functions that were used in deploy's version.
+	// todo: this can be applied for "prometheus" component in monitoring namespace.
+	// todo: features+builder API need to open up to accommodate different ns than DSCI.appnamespace + "component" name.
+	// note: component name is not always really the component - prometheus is example.
+
 	objs, resErr := deploy.GetResources(resMap)
 	if resErr != nil {
 		return resErr
 	}
-
-	// todo: this bit is awkward - pulling from createResources func since we have unstructured already not strings
-	// todo: rework.
-	for _, obj := range objs {
-		for _, opt := range metaOptions {
-			if err := opt(obj); err != nil {
-				return err // return immediately if any of the MetaOptions functions fail
-			}
-		}
-		name := obj.GetName()
-		namespace := obj.GetNamespace()
-
-		err := cli.Get(context.TODO(), k8stypes.NamespacedName{Name: name, Namespace: namespace}, obj.DeepCopy())
-		if err == nil {
-			// object already exists
-			continue
-		}
-		if !k8serrors.IsNotFound(err) {
-			return err
-		}
-
-		err = cli.Create(context.TODO(), obj)
-		if err != nil {
-			return err
-		}
-	}
+	k.objs = objs
 	return nil
 }
 
-func (k kustomizeManifest) Process(_ interface{}) error {
-	return nil
-}
-
-func (k kustomizeManifest) Open() (fs.File, error) {
-	return nil, nil
+func (k *kustomizeManifest) GetObjs() []*unstructured.Unstructured {
+	return k.objs
 }
 
 // Ensure kustomizeManifest implements the Manifest interface.
@@ -195,7 +178,7 @@ var _ Manifest = (*kustomizeManifest)(nil)
 func loadManifestsFrom(fsys fs.FS, path string) ([]Manifest, error) {
 	var manifests []Manifest
 	if isKustomizeManifest(path) {
-		m := createKustomizeManifestFrom(path)
+		m := CreateKustomizeManifestFrom(path, nil)
 		manifests = append(manifests, m)
 		return manifests, nil
 	}
@@ -210,10 +193,10 @@ func loadManifestsFrom(fsys fs.FS, path string) ([]Manifest, error) {
 			return nil
 		}
 		if isTemplateManifest(path) {
-			m := createTemplateManifestFrom(fsys, path)
+			m := CreateTemplateManifestFrom(fsys, path)
 			manifests = append(manifests, m)
 		}
-		m := createBaseManifestFrom(fsys, path)
+		m := CreateBaseManifestFrom(fsys, path)
 		manifests = append(manifests, m)
 
 		return nil
@@ -226,9 +209,9 @@ func loadManifestsFrom(fsys fs.FS, path string) ([]Manifest, error) {
 	return manifests, nil
 }
 
-func createBaseManifestFrom(fsys fs.FS, path string) baseManifest {
+func CreateBaseManifestFrom(fsys fs.FS, path string) *BaseManifest {
 	basePath := filepath.Base(path)
-	m := baseManifest{
+	m := &BaseManifest{
 		name:  basePath,
 		path:  path,
 		patch: strings.Contains(basePath, ".patch"),
@@ -238,9 +221,9 @@ func createBaseManifestFrom(fsys fs.FS, path string) baseManifest {
 	return m
 }
 
-func createTemplateManifestFrom(fsys fs.FS, path string) templateManifest {
+func CreateTemplateManifestFrom(fsys fs.FS, path string) *templateManifest {
 	basePath := filepath.Base(path)
-	m := templateManifest{
+	m := &templateManifest{
 		name:  basePath,
 		path:  path,
 		patch: strings.Contains(basePath, ".patch"),
@@ -250,22 +233,47 @@ func createTemplateManifestFrom(fsys fs.FS, path string) templateManifest {
 	return m
 }
 
-func createKustomizeManifestFrom(path string) kustomizeManifest {
+func CreateKustomizeManifestFrom(path string, fsys filesys.FileSystem) *kustomizeManifest {
 	basePath := filepath.Base(path)
-	m := kustomizeManifest{
+	if fsys == nil {
+		fsys = filesys.MakeFsOnDisk()
+	}
+	m := &kustomizeManifest{
 		name: basePath,
 		path: path,
+		fsys: fsys,
 	}
 
 	return m
 }
 
 // parsing helpers
-// TODO: parse if passing dir, check for kustomization file? not sure.
+// todo: support passing the path directly to kustomization.yaml
 func isKustomizeManifest(path string) bool {
-	return strings.Contains(path, "kustomization")
+	_, err := os.Stat(filepath.Join(path, "kustomization.yaml"))
+	return err != nil
 }
 
 func isTemplateManifest(path string) bool {
 	return strings.Contains(path, ".tmpl")
+}
+
+func convertToUnstructureds(resources string, objs []*unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
+	splitter := regexp.MustCompile(YamlSeparator)
+	objectStrings := splitter.Split(resources, -1)
+	for _, str := range objectStrings {
+		if strings.TrimSpace(str) == "" {
+			continue
+		}
+		u := &unstructured.Unstructured{}
+		if err := yaml.Unmarshal([]byte(str), u); err != nil {
+			return nil, err
+		}
+
+		if !isNamespaceSet(u) {
+			return nil, fmt.Errorf("no NS is set on %s", u.GetName())
+		}
+		objs = append(objs, u)
+	}
+	return objs, nil
 }

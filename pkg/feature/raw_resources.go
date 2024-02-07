@@ -16,10 +16,8 @@ package feature
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,32 +34,22 @@ const (
 	YamlSeparator = "(?m)^---[ \t]*$"
 )
 
-func createResources(cli client.Client, resources string, metaOptions ...cluster.MetaOptions) error {
-	splitter := regexp.MustCompile(YamlSeparator)
-	objectStrings := splitter.Split(resources, -1)
-	for _, str := range objectStrings {
-		if strings.TrimSpace(str) == "" {
-			continue
-		}
-		u := &unstructured.Unstructured{}
-		if err := yaml.Unmarshal([]byte(str), u); err != nil {
-			return errors.WithStack(err)
-		}
-
-		if !isNamespaceSet(u) {
-			return fmt.Errorf("no NS is set on %s", u.GetName())
-		}
-
+func createResources(cli client.Client, objects []*unstructured.Unstructured, metaOptions ...cluster.MetaOptions) error {
+	for _, object := range objects {
 		for _, opt := range metaOptions {
-			if err := opt(u); err != nil {
+			if err := opt(object); err != nil {
 				return err // return immediately if any of the MetaOptions functions fail
 			}
 		}
 
-		name := u.GetName()
-		namespace := u.GetNamespace()
+		if !isNamespaceSet(object) {
+			return fmt.Errorf("no NS is set on %s", object.GetName())
+		}
 
-		err := cli.Get(context.TODO(), k8stypes.NamespacedName{Name: name, Namespace: namespace}, u.DeepCopy())
+		name := object.GetName()
+		namespace := object.GetNamespace()
+
+		err := cli.Get(context.TODO(), k8stypes.NamespacedName{Name: name, Namespace: namespace}, object.DeepCopy())
 		if err == nil {
 			// object already exists
 			continue
@@ -70,7 +58,7 @@ func createResources(cli client.Client, resources string, metaOptions ...cluster
 			return errors.WithStack(err)
 		}
 
-		err = cli.Create(context.TODO(), u)
+		err = cli.Create(context.TODO(), object)
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -79,37 +67,23 @@ func createResources(cli client.Client, resources string, metaOptions ...cluster
 	return nil
 }
 
-func patchResources(dyCli dynamic.Interface, resources string) error {
-	splitter := regexp.MustCompile(YamlSeparator)
-	objectStrings := splitter.Split(resources, -1)
-	for _, str := range objectStrings {
-		if strings.TrimSpace(str) == "" {
-			continue
-		}
-		u := &unstructured.Unstructured{}
-		if err := yaml.Unmarshal([]byte(str), u); err != nil {
-			return errors.WithStack(err)
-		}
-
-		if !isNamespaceSet(u) {
-			return fmt.Errorf("no NS is set on %s", u.GetName())
-		}
-
+func patchResources(dyCli dynamic.Interface, patches []*unstructured.Unstructured) error {
+	for _, patch := range patches {
 		gvr := schema.GroupVersionResource{
-			Group:    strings.ToLower(u.GroupVersionKind().Group),
-			Version:  u.GroupVersionKind().Version,
-			Resource: strings.ToLower(u.GroupVersionKind().Kind) + "s",
+			Group:    strings.ToLower(patch.GroupVersionKind().Group),
+			Version:  patch.GroupVersionKind().Version,
+			Resource: strings.ToLower(patch.GroupVersionKind().Kind) + "s",
 		}
 
-		// Convert the individual resource patch from YAML to JSON
-		patchAsJSON, err := yaml.YAMLToJSON([]byte(str))
+		// Convert the individual resource patch to JSON
+		patchAsJSON, err := patch.MarshalJSON() // todo: ensure if this is the right method for the task
 		if err != nil {
 			return errors.WithStack(err)
 		}
 
 		_, err = dyCli.Resource(gvr).
-			Namespace(u.GetNamespace()).
-			Patch(context.TODO(), u.GetName(), k8stypes.MergePatchType, patchAsJSON, metav1.PatchOptions{})
+			Namespace(patch.GetNamespace()).
+			Patch(context.TODO(), patch.GetName(), k8stypes.MergePatchType, patchAsJSON, metav1.PatchOptions{})
 		if err != nil {
 			return errors.WithStack(err)
 		}

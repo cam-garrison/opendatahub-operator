@@ -141,15 +141,29 @@ func (f *Feature) Cleanup() error {
 func (f *Feature) applyManifests() error {
 	var applyErrors *multierror.Error
 	for _, m := range f.manifests {
-		applyErrors = multierror.Append(applyErrors, m.Apply(f.Client, f.DynamicClient, func(obj metav1.Object) error {
-			obj.SetOwnerReferences([]metav1.OwnerReference{
-				f.AsOwnerReference(),
-			})
-			return nil
-		}))
+		// factory method - switches on the type - patch or not. patchApplier vs createApplier.
+		// handle base/template different vs kustomize. if kust do create, if not do
+		// applier like we had before with our differences, metaOptions only within the create Factory method.
+		// todo: OwnedByFeatureTracker(f))?
+		applyErrors = multierror.Append(applyErrors, f.apply(m))
 	}
 
 	return applyErrors.ErrorOrNil()
+}
+
+func (f *Feature) apply(m Manifest) error {
+	var err error
+	if m.IsPatch() {
+		return patchResources(f.DynamicClient, m.GetObjs())
+	}
+	err = createResources(f.Client, m.GetObjs(), func(obj metav1.Object) error {
+		obj.SetOwnerReferences([]metav1.OwnerReference{
+			f.AsOwnerReference(),
+		})
+		return nil
+	})
+
+	return err
 }
 
 func (f *Feature) CreateConfigMap(cfgMapName string, data map[string]string) error {
