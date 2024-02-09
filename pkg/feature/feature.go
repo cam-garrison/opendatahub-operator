@@ -22,8 +22,9 @@ import (
 
 type Feature struct {
 	Name    string
-	Spec    *Spec // map[string]any{}
+	Spec    *Spec
 	Enabled bool
+	Tracker *featurev1.FeatureTracker
 
 	Clientset     *kubernetes.Clientset
 	DynamicClient dynamic.Interface
@@ -198,14 +199,14 @@ func (f *Feature) addCleanup(cleanupFuncs ...Action) {
 }
 
 func (f *Feature) AsOwnerReference() metav1.OwnerReference {
-	return f.Spec.Tracker.ToOwnerReference()
+	return f.Tracker.ToOwnerReference()
 }
 
 // updateFeatureTrackerStatus updates conditions of a FeatureTracker.
 // It's deliberately logging errors instead of handing them as it is used in deferred error handling of Feature public API,
 // which is more predictable.
 func (f *Feature) updateFeatureTrackerStatus(condType conditionsv1.ConditionType, status corev1.ConditionStatus, reason featurev1.FeaturePhase, message string) {
-	tracker := f.Spec.Tracker
+	tracker := f.Tracker
 
 	// Update the status
 	if tracker.Status.Conditions == nil {
@@ -223,5 +224,5 @@ func (f *Feature) updateFeatureTrackerStatus(condType conditionsv1.ConditionType
 		f.Log.Error(err, "Error updating FeatureTracker status")
 	}
 
-	f.Spec.Tracker.Status = tracker.Status
+	f.Tracker.Status = tracker.Status
 }
