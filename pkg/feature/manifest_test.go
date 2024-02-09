@@ -1,4 +1,4 @@
-package features_test
+package feature_test
 
 import (
 	"io/fs"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature"
@@ -36,7 +37,7 @@ var _ = Describe("Manifest Processing", func() {
 
 	})
 
-	Describe("BaseManifest Process", func() {
+	Describe("baseManifest Process", func() {
 		BeforeEach(func() {
 			resourceYaml := `
 apiVersion: v1
@@ -60,13 +61,15 @@ data:
 			// Simulate adding to and processing from a slice of Manifest interfaces
 			manifests := []feature.Manifest{manifest}
 			var err error
+			var objs []*unstructured.Unstructured
 			for i := range manifests {
-				err = manifests[i].Process(nil)
+				objs, err = manifests[i].Process(nil)
+				if err != nil {
+					break
+				}
 			}
 			Expect(err).NotTo(HaveOccurred())
 
-			// then
-			objs := manifest.GetObjs()
 			Expect(objs).To(HaveLen(1))
 			Expect(objs[0].GetKind()).To(Equal("ConfigMap"))
 			Expect(objs[0].GetName()).To(Equal("my-configmap"))
@@ -82,7 +85,7 @@ metadata:
   name: my-configmap
   namespace: {{.Namespace}}
 data:
-  key: value
+  key: Data
 `
 			path = "path/to/template.yaml"
 			err := afero.WriteFile(mockFS.Afs, path, []byte(resourceYaml), 0644)
@@ -91,10 +94,8 @@ data:
 
 		It("should process the template manifest correctly", func() {
 			// given
-			data := struct {
-				Namespace string
-			}{
-				Namespace: "template-ns",
+			data := map[string]any{
+				"Namespace": "template-ns",
 			}
 			manifest := feature.CreateTemplateManifestFrom(mockFS, path)
 
@@ -102,13 +103,16 @@ data:
 			// Simulate adding to and processing from a slice of Manifest interfaces
 			manifests := []feature.Manifest{manifest}
 			var err error
+			var objs []*unstructured.Unstructured
 			for i := range manifests {
-				err = manifests[i].Process(data)
+				objs, err = manifests[i].Process(data)
+				if err != nil {
+					break
+				}
 			}
 			Expect(err).NotTo(HaveOccurred())
 
 			// then
-			objs := manifest.GetObjs()
 			Expect(objs).To(HaveLen(1))
 			Expect(objs[0].GetKind()).To(Equal("ConfigMap"))
 			Expect(objs[0].GetName()).To(Equal("my-configmap"))
@@ -147,16 +151,20 @@ data:
 
 			// when
 			manifests := []feature.Manifest{manifest}
+			var objs []*unstructured.Unstructured
 			for i := range manifests {
-				err = manifests[i].Process(nil)
+				objs, err = manifests[i].Process(nil)
+				if err != nil {
+					break
+				}
 			}
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			// then
-			objs := manifest.GetObjs()
 			Expect(objs).To(HaveLen(1))
-			Expect(objs[0].GetKind()).To(Equal("ConfigMap"))
-			Expect(objs[0].GetName()).To(Equal("my-configmap"))
+			configMap := objs[0]
+			Expect(configMap.GetKind()).To(Equal("ConfigMap"))
+			Expect(configMap.GetName()).To(Equal("my-configmap"))
 		})
 	})
 })

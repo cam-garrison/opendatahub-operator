@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,7 +22,7 @@ import (
 
 type Feature struct {
 	Name    string
-	Spec    *Spec
+	Spec    *Spec // map[string]any{}
 	Enabled bool
 
 	Clientset     *kubernetes.Clientset
@@ -97,16 +98,19 @@ func (f *Feature) Apply() (err error) {
 		}
 	}
 
-	phase = featurev1.ProcessTemplates
+	phase = featurev1.ApplyManifests
 	for i := range f.manifests {
-		if err := f.manifests[i].Process(f.Spec); err != nil {
+		var objs []*unstructured.Unstructured
+		manifest := f.manifests[i]
+		apply := f.createApplier(manifest)
+
+		if objs, err = manifest.Process(f.Spec); err != nil {
 			return errors.WithStack(err)
 		}
-	}
 
-	phase = featurev1.ApplyManifests
-	if err := f.applyManifests(); err != nil {
-		return errors.WithStack(err)
+		if err = apply(objs); err != nil {
+			return errors.WithStack(err)
+		}
 	}
 
 	phase = featurev1.PostConditions
@@ -138,32 +142,24 @@ func (f *Feature) Cleanup() error {
 	return cleanupErrors.ErrorOrNil()
 }
 
-func (f *Feature) applyManifests() error {
-	var applyErrors *multierror.Error
-	for _, m := range f.manifests {
-		// factory method - switches on the type - patch or not. patchApplier vs createApplier.
-		// handle base/template different vs kustomize. if kust do create, if not do
-		// applier like we had before with our differences, metaOptions only within the create Factory method.
-		// todo: OwnedByFeatureTracker(f))?
-		applyErrors = multierror.Append(applyErrors, f.apply(m))
-	}
+type applier func(objects []*unstructured.Unstructured) error
 
-	return applyErrors.ErrorOrNil()
-}
-
-func (f *Feature) apply(m Manifest) error {
-	var err error
-	if m.IsPatch() {
-		return patchResources(f.DynamicClient, m.GetObjs())
+func (f *Feature) createApplier(m Manifest) applier {
+	if m.isPatch() {
+		return func(objects []*unstructured.Unstructured) error {
+			return patchResources(f.DynamicClient, objects)
+		}
 	}
-	err = createResources(f.Client, m.GetObjs(), func(obj metav1.Object) error {
-		obj.SetOwnerReferences([]metav1.OwnerReference{
-			f.AsOwnerReference(),
+	// todo: OwnedByFeatureTracker(f))?
+
+	return func(objects []*unstructured.Unstructured) error {
+		return createResources(f.Client, objects, func(obj metav1.Object) error {
+			obj.SetOwnerReferences([]metav1.OwnerReference{
+				f.AsOwnerReference(),
+			})
+			return nil
 		})
-		return nil
-	})
-
-	return err
+	}
 }
 
 func (f *Feature) CreateConfigMap(cfgMapName string, data map[string]string) error {
