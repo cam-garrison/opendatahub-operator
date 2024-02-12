@@ -3,7 +3,6 @@ package feature
 import (
 	"context"
 	"fmt"
-
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-multierror"
 	conditionsv1 "github.com/openshift/custom-resource-status/conditions/v1"
@@ -14,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlLog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -22,7 +22,7 @@ import (
 
 type Feature struct {
 	Name    string
-	Spec    *Spec
+	Spec    map[string]any
 	Enabled bool
 	Tracker *featurev1.FeatureTracker
 
@@ -49,6 +49,20 @@ func newFeature(name string) *Feature {
 	}
 }
 
+func GetValue[T any](f *Feature, key string) (T, error) {
+	value, found := f.Spec[key]
+	if !found {
+		return *new(T), fmt.Errorf("%s not found", key)
+	}
+
+	typedValue, ok := value.(T)
+	if !ok {
+		return *new(T), fmt.Errorf("%s not of type %s", key, reflect.TypeOf(new(T)).Name())
+	}
+
+	return typedValue, nil
+}
+
 // Action is a func type which can be used for different purposes while having access to Feature struct.
 type Action func(feature *Feature) error
 
@@ -58,7 +72,7 @@ func (f *Feature) Apply() (err error) {
 		return nil
 	}
 
-	if trackerErr := f.createFeatureTracker(); err != nil {
+	if trackerErr := f.createFeatureTracker(); trackerErr != nil {
 		return trackerErr
 	}
 
@@ -164,10 +178,15 @@ func (f *Feature) createApplier(m Manifest) applier {
 }
 
 func (f *Feature) CreateConfigMap(cfgMapName string, data map[string]string) error {
+	namespace, ok := f.Spec["AppNamespace"].(string)
+	if !ok {
+		return fmt.Errorf("appNamespace not set or not set as string")
+	}
+
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cfgMapName,
-			Namespace: f.Spec.AppNamespace,
+			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				f.AsOwnerReference(),
 			},

@@ -209,9 +209,9 @@ var _ = Describe("Serverless feature", func() {
 			// Stubbing feature as we want to test particular functions in isolation
 			testFeature = &feature.Feature{
 				Name: "test-feature",
-				Spec: &feature.Spec{
-					ServiceMeshSpec: &infrav1.ServiceMeshSpec{},
-					Serving:         &infrav1.ServingSpec{},
+				Spec: map[string]any{
+					"ServiceMeshSpec": &infrav1.ServiceMeshSpec{},
+					"Serving":         &infrav1.ServingSpec{},
 				},
 			}
 
@@ -227,13 +227,15 @@ var _ = Describe("Serverless feature", func() {
 			It("should set default value when value is empty in the DSCI", func() {
 				// Default value is blank -> testFeature.Spec.Serving.IngressGateway.Certificate.SecretName = ""
 				Expect(serverless.ServingDefaultValues(testFeature)).To(Succeed())
-				Expect(testFeature.Spec.KnativeCertificateSecret).To(Equal(serverless.DefaultCertificateSecretName))
+				Expect(testFeature.Spec["KnativeCertificateSecret"]).To(Equal(serverless.DefaultCertificateSecretName))
 			})
 
 			It("should use user value when set in the DSCI", func() {
-				testFeature.Spec.Serving.IngressGateway.Certificate.SecretName = "fooBar"
+				servingSpec, ok := testFeature.Spec["Serving"].(*infrav1.ServingSpec)
+				Expect(ok).To(BeTrue())
+				servingSpec.IngressGateway.Certificate.SecretName = "fooBar"
 				Expect(serverless.ServingDefaultValues(testFeature)).To(Succeed())
-				Expect(testFeature.Spec.KnativeCertificateSecret).To(Equal("fooBar"))
+				Expect(testFeature.Spec["KnativeCertificateSecret"]).To(Equal("fooBar"))
 			})
 		})
 
@@ -249,13 +251,15 @@ var _ = Describe("Serverless feature", func() {
 
 				// Default value is blank -> testFeature.Spec.Serving.IngressGateway.Domain = ""
 				Expect(serverless.ServingIngressDomain(testFeature)).To(Succeed())
-				Expect(testFeature.Spec.KnativeIngressDomain).To(Equal("*.foo.io"))
+				Expect(testFeature.Spec["KnativeIngressDomain"]).To(Equal("*.foo.io"))
 			})
 
 			It("should use user value when set in the DSCI", func() {
-				testFeature.Spec.Serving.IngressGateway.Domain = testDomainFooCom
+				servingSpec, ok := testFeature.Spec["Serving"].(*infrav1.ServingSpec)
+				Expect(ok).To(BeTrue())
+				servingSpec.IngressGateway.Domain = testDomainFooCom
 				Expect(serverless.ServingIngressDomain(testFeature)).To(Succeed())
-				Expect(testFeature.Spec.KnativeIngressDomain).To(Equal(testDomainFooCom))
+				Expect(testFeature.Spec["KnativeIngressDomain"]).To(Equal(testDomainFooCom))
 			})
 		})
 	})

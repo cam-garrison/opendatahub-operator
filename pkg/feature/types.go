@@ -9,10 +9,10 @@ import (
 
 type Spec struct {
 	*infrav1.ServiceMeshSpec
-	Serving                  *infrav1.ServingSpec
 	OAuth                    OAuth
 	AppNamespace             string
 	Domain                   string
+	Serving                  *infrav1.ServingSpec
 	KnativeCertificateSecret string
 	KnativeIngressDomain     string
 	Source                   *featurev1.Source

@@ -1,8 +1,8 @@
 apiVersion: maistra.io/v2
 kind: ServiceMeshControlPlane
 metadata:
-  name: {{ .ControlPlane.Name }}
-  namespace: {{ .ControlPlane.Namespace }}
+  name: {{ .ServiceMesh.ControlPlane.Name }}
+  namespace: {{ .ServiceMesh.ControlPlane.Namespace }}
 spec:
   tracing:
     type: None

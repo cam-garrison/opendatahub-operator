@@ -24,4 +24,4 @@ spec:
       kubernetes.podspec-nodeselector: enabled
       kubernetes.podspec-tolerations: enabled
     istio:
-      local-gateway.knative-serving.knative-local-gateway: "knative-local-gateway.{{ .ControlPlane.Namespace }}.svc.cluster.local"
+      local-gateway.knative-serving.knative-local-gateway: "knative-local-gateway.{{ .ServiceMesh.ControlPlane.Namespace }}.svc.cluster.local"

@@ -4,23 +4,34 @@ import (
 	"fmt"
 	"strings"
 
+	infrav1 "github.com/opendatahub-io/opendatahub-operator/v2/infrastructure/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature"
 )
 
 const DefaultCertificateSecretName = "knative-serving-cert"
 
 func ServingDefaultValues(f *feature.Feature) error {
-	certificateSecretName := strings.TrimSpace(f.Spec.Serving.IngressGateway.Certificate.SecretName)
+	servingSpec, ok := f.Spec["Serving"].(*infrav1.ServingSpec)
+	if !ok {
+		return fmt.Errorf("serving spec does not exist or is of incorrect type")
+	}
+
+	certificateSecretName := strings.TrimSpace(servingSpec.IngressGateway.Certificate.SecretName)
 	if len(certificateSecretName) == 0 {
 		certificateSecretName = DefaultCertificateSecretName
 	}
 
-	f.Spec.KnativeCertificateSecret = certificateSecretName
+	f.Spec["KnativeCertificateSecret"] = certificateSecretName
 	return nil
 }
 
 func ServingIngressDomain(f *feature.Feature) error {
-	domain := strings.TrimSpace(f.Spec.Serving.IngressGateway.Domain)
+	servingSpec, ok := f.Spec["Serving"].(*infrav1.ServingSpec)
+	if !ok {
+		return fmt.Errorf("serving spec does not exist or is of incorrect type")
+	}
+
+	domain := strings.TrimSpace(servingSpec.IngressGateway.Domain)
 	if len(domain) == 0 {
 		var errDomain error
 		domain, errDomain = GetDomain(f.DynamicClient)
@@ -31,6 +42,6 @@ func ServingIngressDomain(f *feature.Feature) error {
 		domain = "*." + domain
 	}
 
-	f.Spec.KnativeIngressDomain = domain
+	f.Spec["KnativeIngressDomain"] = domain
 	return nil
 }

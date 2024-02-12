@@ -50,11 +50,21 @@ func removeFeatureTracker(f *Feature) error {
 }
 
 func (f *Feature) getFeatureTracker() (*featurev1.FeatureTracker, error) {
-	tracker := featurev1.NewFeatureTracker(f.Name, f.Spec.AppNamespace)
+	namespace, ok := f.Spec["AppNamespace"].(string)
+	if !ok {
+		return nil, fmt.Errorf("appNamespace not set or not set as string")
+	}
+
+	source, ok := f.Spec["Source"].(*featurev1.Source)
+	if !ok {
+		return nil, fmt.Errorf("source not set or not set as source type")
+	}
+
+	tracker := featurev1.NewFeatureTracker(f.Name, namespace)
 
 	tracker.Spec = featurev1.FeatureTrackerSpec{
-		Source:       *f.Spec.Source,
-		AppNamespace: f.Spec.AppNamespace,
+		Source:       *source,
+		AppNamespace: namespace,
 	}
 
 	err := f.Client.Get(context.Background(), client.ObjectKeyFromObject(tracker), tracker)

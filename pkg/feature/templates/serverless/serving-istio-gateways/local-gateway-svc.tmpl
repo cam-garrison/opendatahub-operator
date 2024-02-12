@@ -4,7 +4,7 @@ metadata:
   labels:
     experimental.istio.io/disable-gateway-port-translation: "true"
   name: knative-local-gateway
-  namespace: {{ .ControlPlane.Namespace }}
+  namespace: {{ .ServiceMesh.ControlPlane.Namespace }}
 spec:
   ports:
     - name: http2

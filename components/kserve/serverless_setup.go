@@ -68,7 +68,7 @@ func (k *Kserve) configureServerlessFeatures() feature.FeaturesProvider {
 
 func PopulateComponentSettings(k *Kserve) feature.Action {
 	return func(f *feature.Feature) error {
-		f.Spec.Serving = &k.Serving
+		f.Spec["Serving"] = &k.Serving
 		return nil
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 
+	infrav1 "github.com/opendatahub-io/opendatahub-operator/v2/infrastructure/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/gvr"
 )
@@ -36,22 +37,21 @@ func EnsureServiceMeshInstalled(f *feature.Feature) error {
 		return err
 	}
 
-	smcp := f.Spec.ControlPlane.Name
-	smcpNs := f.Spec.ControlPlane.Namespace
+	serviceMeshSpec, ok := f.Spec["ServiceMesh"].(*infrav1.ServiceMeshSpec)
+	if !ok {
+		return fmt.Errorf("ServiceMesh spec is not found or is of incorrect type")
+	}
 
-	if err := WaitForControlPlaneToBeReady(f); err != nil {
-		f.Log.Error(err, "failed waiting for control plane being ready", "control-plane", smcp, "namespace", smcpNs)
-
+	controlPlane := serviceMeshSpec.ControlPlane
+	if err := WaitForControlPlaneToBeReady(f, controlPlane.Name, controlPlane.Namespace); err != nil {
+		f.Log.Error(err, "failed waiting for control plane being ready", "control-plane", controlPlane.Name, "namespace", controlPlane.Namespace)
 		return multierror.Append(err, errors.New("service mesh control plane is not ready")).ErrorOrNil()
 	}
 
 	return nil
 }
 
-func WaitForControlPlaneToBeReady(f *feature.Feature) error {
-	smcp := f.Spec.ControlPlane.Name
-	smcpNs := f.Spec.ControlPlane.Namespace
-
+func WaitForControlPlaneToBeReady(f *feature.Feature, smcp, smcpNs string) error {
 	f.Log.Info("waiting for control plane components to be ready", "control-plane", smcp, "namespace", smcpNs, "duration (s)", duration.Seconds())
 
 	return wait.PollUntilContextTimeout(context.TODO(), interval, duration, false, func(ctx context.Context) (bool, error) {
