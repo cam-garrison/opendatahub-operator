@@ -23,8 +23,9 @@ type featureBuilder struct {
 	name            string
 	config          *rest.Config
 	builders        []partialBuilder
-	featuresHanlder *FeaturesHandler
+	featuresHandler *FeaturesHandler
 	fsys            fs.FS
+	targetNS        string
 }
 
 func CreateFeature(name string) *usingFeaturesHandler { //nolint:golint,revive //No need to export featureBuilder.
@@ -51,7 +52,7 @@ func (u *usingFeaturesHandler) For(featuresHandler *FeaturesHandler) *featureBui
 
 	fb := &featureBuilder{
 		name:            u.name,
-		featuresHanlder: featuresHandler,
+		featuresHandler: featuresHandler,
 		fsys:            embeddedFiles,
 	}
 
@@ -183,7 +184,12 @@ func (fb *featureBuilder) Load() error {
 		}
 	}
 
-	fb.featuresHanlder.features = append(fb.featuresHanlder.features, feature)
+	// default TargetNamespace to AppNamespace if not explicitly set
+	if feature.Spec.TargetNamespace == "" {
+		feature.Spec.TargetNamespace = feature.Spec.AppNamespace
+	}
+
+	fb.featuresHandler.features = append(fb.featuresHandler.features, feature)
 
 	return nil
 }
@@ -213,5 +219,21 @@ func (fb *featureBuilder) withDefaultClient() error {
 // If ManifestSource is not called in the builder chain, the default source will be the embeddedFiles.
 func (fb *featureBuilder) ManifestSource(fsys fs.FS) *featureBuilder {
 	fb.fsys = fsys
+	return fb
+}
+
+func (fb *featureBuilder) TargetNamespace(targetNs string) *featureBuilder {
+	fb.targetNS = targetNs
+
+	setTargetNamespace := func(f *Feature) error {
+		if f.Spec == nil {
+			return errors.New("Spec has not been initialized")
+		}
+		f.Spec.TargetNamespace = fb.targetNS
+		return nil
+	}
+
+	fb.builders = append(fb.builders, setTargetNamespace)
+
 	return fb
 }

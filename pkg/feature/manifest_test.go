@@ -143,6 +143,11 @@ metadata:
 data:
   key: value
 `
+			// TODO: rework for map[string]any when supported
+			data := feature.Spec{
+				TargetNamespace: "kust-ns",
+			}
+
 			err := fSys.WriteFile(filepath.Join(path, "kustomization.yaml"), []byte(kustomizationYaml))
 			Expect(err).ToNot(HaveOccurred())
 			err = fSys.WriteFile(filepath.Join(path, "resource.yaml"), []byte(resourceYaml))
@@ -153,7 +158,7 @@ data:
 			manifests := []feature.Manifest{manifest}
 			var objs []*unstructured.Unstructured
 			for i := range manifests {
-				objs, err = manifests[i].Process(nil)
+				objs, err = manifests[i].Process(&data)
 				if err != nil {
 					break
 				}

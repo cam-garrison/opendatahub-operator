@@ -19,7 +19,9 @@ import (
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
+	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/deploy"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/plugins"
 )
 
 //go:embed templates
@@ -121,21 +123,20 @@ func (t *templateManifest) Process(data interface{}) ([]*unstructured.Unstructur
 // Ensure templateManifest implements the Manifest interface.
 var _ Manifest = (*templateManifest)(nil)
 
+// kustomizeManifest supports paths to kustomization files / directories containing a kustomization file
+// note that it only supports to paths within the mounted files ie: opt/manifests.
 type kustomizeManifest struct {
 	name,
 	path string // path is to the directory containing a kustomization.yaml file within it or path to kust file itself
-	fsys filesys.FileSystem // todo: decide if we want to keep - helpful for mocking fs in testing.
+	fsys filesys.FileSystem
 }
 
 func (k *kustomizeManifest) isPatch() bool {
 	return false
 }
 
-func (k *kustomizeManifest) Process(_ interface{}) ([]*unstructured.Unstructured, error) {
+func (k *kustomizeManifest) Process(data interface{}) ([]*unstructured.Unstructured, error) {
 	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-	// Create resmap
-	// Use kustomization file under manifest path
-
 	var resMap resmap.ResMap
 	resMap, resErr := kustomizer.Run(k.fsys, k.path)
 
@@ -143,10 +144,22 @@ func (k *kustomizeManifest) Process(_ interface{}) ([]*unstructured.Unstructured
 		return nil, fmt.Errorf("error during resmap resources: %w", resErr)
 	}
 
-	// todo: here - decide if we need the add labels / replace ns functions that were used in deploy's version.
-	// todo: this can be applied for "prometheus" component in monitoring namespace.
-	// todo: features+builder API need to open up to accommodate different ns than DSCI.appnamespace + "component" name.
-	// note: component name is not always really the component - prometheus is example.
+	targetNs := getTargetNs(data)
+	if targetNs == "" {
+		return nil, fmt.Errorf("error grabbing targetNs from feature spec")
+	}
+
+	if err := plugins.ApplyNamespacePlugin(targetNs, resMap); err != nil {
+		return nil, err
+	}
+
+	// Todo: for now, this only supports applying labels to manifests source.Name when source.type==Component
+	componentName := getComponentName(data)
+	if componentName != "" {
+		if err := plugins.ApplyAddLabelsPlugin(componentName, resMap); err != nil {
+			return nil, err
+		}
+	}
 
 	objs, resErr := deploy.GetResources(resMap)
 	if resErr != nil {
@@ -235,12 +248,12 @@ func CreateKustomizeManifestFrom(path string, fsys filesys.FileSystem) *kustomiz
 	return m
 }
 
-// parsing helpers.
+// parsing helpers
+// isKustomizeManifest checks default filesystem for presence of kustomization file at this path.
 func isKustomizeManifest(path string) bool {
 	if filepath.Base(path) == KustomizationFile {
 		return true
 	}
-
 	_, err := os.Stat(filepath.Join(path, KustomizationFile))
 	return err == nil
 }
@@ -267,4 +280,26 @@ func convertToUnstructureds(resources string, objs []*unstructured.Unstructured)
 		objs = append(objs, u)
 	}
 	return objs, nil
+}
+
+// todo: rework these when spec is type map[string]any
+func getTargetNs(data interface{}) string {
+	if spec, ok := data.(*Spec); ok {
+		return spec.TargetNamespace
+	}
+	return ""
+}
+
+func getComponentName(data interface{}) string {
+	if featSpec, ok := data.(*Spec); ok {
+		source := featSpec.Source
+		if source == nil {
+			return ""
+		}
+		if source.Type == featurev1.ComponentType {
+			return source.Name
+		}
+		return ""
+	}
+	return ""
 }
