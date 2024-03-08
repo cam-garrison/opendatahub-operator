@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 )
 
-//go:embed templates
+//go:embed fixtures/templates
 var testEmbeddedFiles embed.FS
 
 const (
@@ -412,7 +412,7 @@ var _ = Describe("feature cleanup", func() {
 						For(handler).
 						UsingConfig(envTest.Config).
 						ManifestSource(testEmbeddedFiles).
-						Manifests(path.Join(feature.BaseDir, "namespace.yaml")).
+						Manifests(path.Join("fixtures", feature.BaseDir, "namespace.yaml")).
 						Load()
 
 					Expect(createNamespaceErr).ToNot(HaveOccurred())
@@ -470,7 +470,7 @@ metadata:
 					createCfgMapErr := feature.CreateFeature("create-cfg-map").
 						For(handler).
 						UsingConfig(envTest.Config).
-						Manifests(path.Join(feature.BaseDir, "fake-kust-dir")).
+						Manifests(path.Join("fixtures", feature.BaseDir, "fake-kust-dir")).
 						Load()
 
 					Expect(createCfgMapErr).ToNot(HaveOccurred())
