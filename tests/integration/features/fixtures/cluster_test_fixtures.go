@@ -2,6 +2,10 @@ package fixtures
 
 import (
 	"context"
+	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
+	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature"
+	"k8s.io/apimachinery/pkg/types"
 
 	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -42,6 +46,70 @@ func NewNamespace(name string) *v1.Namespace {
 	return &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
+		},
+	}
+}
+
+func GetConfigMap(name, namespace string, client client.Client) (*v1.ConfigMap, error) {
+	cfgMap := &v1.ConfigMap{}
+	err := client.Get(context.Background(), types.NamespacedName{
+		Name: name, Namespace: namespace,
+	}, cfgMap)
+
+	return cfgMap, err
+}
+
+func GetNamespace(namespace string, client client.Client) (*v1.Namespace, error) {
+	ns := NewNamespace(namespace)
+	err := client.Get(context.Background(), types.NamespacedName{Name: namespace}, ns)
+
+	return ns, err
+}
+
+func GetService(name, namespace string, client client.Client) (*v1.Service, error) {
+	svc := &v1.Service{}
+	err := client.Get(context.Background(), types.NamespacedName{
+		Name: name, Namespace: namespace,
+	}, svc)
+
+	return svc, err
+}
+
+func CreateSecret(name, namespace string) func(f *feature.Feature) error {
+	return func(f *feature.Feature) error {
+		secret := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				OwnerReferences: []metav1.OwnerReference{
+					f.AsOwnerReference(),
+				},
+			},
+			Data: map[string][]byte{
+				"test": []byte("test"),
+			},
+		}
+
+		return f.Client.Create(context.TODO(), secret)
+	}
+}
+
+func GetFeatureTracker(featureName, appNamespace string, cli client.Client) (*featurev1.FeatureTracker, error) { //nolint:unparam //reason appNs
+	tracker := featurev1.NewFeatureTracker(featureName, appNamespace)
+	err := cli.Get(context.Background(), client.ObjectKey{
+		Name: tracker.Name,
+	}, tracker)
+
+	return tracker, err
+}
+
+func NewDSCInitialization(ns string) *dsciv1.DSCInitialization {
+	return &dsciv1.DSCInitialization{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default-dsci",
+		},
+		Spec: dsciv1.DSCInitializationSpec{
+			ApplicationsNamespace: ns,
 		},
 	}
 }

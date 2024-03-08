@@ -38,7 +38,7 @@ var _ = Describe("Serverless feature", func() {
 		Expect(err).ToNot(HaveOccurred())
 		objectCleaner = envtestutil.CreateCleaner(c, envTest.Config, timeout, interval)
 
-		dsci = newDSCInitialization("default")
+		dsci = fixtures.NewDSCInitialization("default")
 		kserveComponent = &kserve.Kserve{}
 	})
 

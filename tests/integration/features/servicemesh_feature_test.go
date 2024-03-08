@@ -38,7 +38,7 @@ var _ = Describe("Service Mesh feature", func() {
 
 		namespace := envtestutil.AppendRandomNameTo("service-mesh-settings")
 
-		dsci = newDSCInitialization(namespace)
+		dsci = fixtures.NewDSCInitialization(namespace)
 
 		Expect(err).ToNot(HaveOccurred())
 	})
