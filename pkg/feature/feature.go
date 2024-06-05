@@ -23,6 +23,7 @@ type Feature struct {
 	Spec    *Spec
 	Enabled bool
 	Managed bool
+	Owner   metav1.Object
 	Tracker *featurev1.FeatureTracker
 
 	Client client.Client
@@ -106,7 +107,7 @@ func (f *Feature) applyFeature() error {
 		}
 
 		if f.Managed {
-			manifest.MarkAsManaged(objs)
+			manifest.MarkAsManaged(objs, f.Owner, f.Client.Scheme())
 		}
 
 		if err := apply(objs); err != nil {
@@ -160,7 +161,7 @@ func (f *Feature) createApplier(m Manifest) applier {
 	}
 
 	return func(objects []*unstructured.Unstructured) error {
-		return applyResources(f.Client, objects, OwnedBy(f))
+		return applyResources(f.Client, objects, AddOwner(f))
 	}
 }
 
@@ -183,7 +184,7 @@ func (f *Feature) ApplyManifest(path string) error {
 		}
 
 		if f.Managed {
-			manifest.MarkAsManaged(objs)
+			manifest.MarkAsManaged(objs, f.Owner, f.Client.Scheme())
 		}
 
 		if err = apply(objs); err != nil {
@@ -197,6 +198,10 @@ func (f *Feature) AsOwnerReference() metav1.OwnerReference {
 	return f.Tracker.ToOwnerReference()
 }
 
-func OwnedBy(f *Feature) cluster.MetaOptions {
+func SetOwner(f *Feature) cluster.MetaOptions {
 	return cluster.WithOwnerReference(f.AsOwnerReference())
+}
+
+func AddOwner(f *Feature) cluster.MetaOptions {
+	return cluster.OwnedBy(f.Tracker, f.Client.Scheme())
 }

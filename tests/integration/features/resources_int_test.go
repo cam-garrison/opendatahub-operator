@@ -5,6 +5,7 @@ import (
 	"path"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
@@ -58,6 +59,7 @@ var _ = Describe("Applying and updating resources", func() {
 			// expect that modification is reconciled away
 			Expect(featuresHandler.Apply()).To(Succeed())
 			verifyAnnotation(envTestClient, testNamespace, service.Name, "example-annotation", "")
+			verifyOwnerRef(envTestClient, testNamespace, service.Name)
 		})
 	})
 
@@ -110,7 +112,8 @@ func createAndApplyFeature(dsci *dsciv1.DSCInitialization, managed bool, feature
 			ManifestSource(fixtures.TestEmbeddedFiles).
 			Manifests(path.Join(fixtures.BaseDir, yamlFile))
 		if managed {
-			creator.Managed()
+			owner := createFakeOwner()
+			creator.Managed(owner)
 		}
 		return creator.Load()
 	})
@@ -139,4 +142,28 @@ func verifyAnnotation(client client.Client, namespace, serviceName, annotationKe
 	updatedService, err := fixtures.GetService(client, namespace, serviceName)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(updatedService.Annotations[annotationKey]).To(Equal(expectedValue))
+}
+
+func verifyOwnerRef(client client.Client, namespace, serviceName string) {
+	svc, err := fixtures.GetService(client, namespace, serviceName)
+	Expect(err).ToNot(HaveOccurred())
+	expectedOwnerRef := createFakeOwner()
+	found := false
+	for _, ownerRef := range svc.OwnerReferences {
+		if ownerRef.UID == expectedOwnerRef.GetUID() && ownerRef.Name == expectedOwnerRef.GetName() {
+			found = true
+			break
+		}
+	}
+	Expect(found).To(BeTrue())
+}
+
+func createFakeOwner() *v1.ConfigMap {
+	return &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fake-owner",
+			Namespace: "test-namespace",
+			UID:       "12345",
+		},
+	}
 }

@@ -7,6 +7,7 @@ import (
 	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/pkg/errors"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +27,7 @@ type featureBuilder struct {
 	fsys            fs.FS
 	targetNS        string
 	managed         bool
+	owner           metav1.Object
 }
 
 // CreateFeature creates a new feature builder with the given name.
@@ -107,8 +109,9 @@ func (fb *featureBuilder) TargetNamespace(targetNs string) *featureBuilder {
 
 // Managed marks the feature as managed by the operator.  This effectively marks all resources which are part of this feature
 // as those that should be updated on operator reconcile.
-func (fb *featureBuilder) Managed() *featureBuilder {
+func (fb *featureBuilder) Managed(owner metav1.Object) *featureBuilder {
 	fb.managed = true
+	fb.owner = owner
 
 	return fb
 }
@@ -201,6 +204,7 @@ func (fb *featureBuilder) Load() error {
 	feature.Spec.TargetNamespace = fb.targetNS
 	feature.fsys = fb.fsys
 	feature.Managed = fb.managed
+	feature.Owner = fb.owner
 
 	fb.featuresHandler.features = append(fb.featuresHandler.features, feature)
 

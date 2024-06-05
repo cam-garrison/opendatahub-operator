@@ -11,7 +11,10 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/metadata/annotations"
 )
@@ -20,7 +23,7 @@ type Manifest interface {
 	// Process allows any arbitrary struct to be passed and used while processing the content of the manifest.
 	Process(data any) ([]*unstructured.Unstructured, error)
 	// MarkAsManaged sets all non-patch objects to be managed/reconciled by setting the annotation.
-	MarkAsManaged(objects []*unstructured.Unstructured)
+	MarkAsManaged(objects []*unstructured.Unstructured, owner metav1.Object, scheme *runtime.Scheme)
 }
 
 type rawManifest struct {
@@ -48,9 +51,9 @@ func (b *rawManifest) Process(_ any) ([]*unstructured.Unstructured, error) {
 	return convertToUnstructuredSlice(resources)
 }
 
-func (b *rawManifest) MarkAsManaged(objects []*unstructured.Unstructured) {
+func (b *rawManifest) MarkAsManaged(objects []*unstructured.Unstructured, owner metav1.Object, scheme *runtime.Scheme) {
 	if !b.patch {
-		markAsManaged(objects)
+		markAsManaged(objects, owner, scheme)
 	}
 }
 
@@ -93,13 +96,13 @@ func (t *templateManifest) Process(data any) ([]*unstructured.Unstructured, erro
 	return convertToUnstructuredSlice(resources)
 }
 
-func (t *templateManifest) MarkAsManaged(objects []*unstructured.Unstructured) {
+func (t *templateManifest) MarkAsManaged(objects []*unstructured.Unstructured, owner metav1.Object, scheme *runtime.Scheme) {
 	if !t.patch {
-		markAsManaged(objects)
+		markAsManaged(objects, owner, scheme)
 	}
 }
 
-func markAsManaged(objs []*unstructured.Unstructured) {
+func markAsManaged(objs []*unstructured.Unstructured, owner metav1.Object, scheme *runtime.Scheme) {
 	for _, obj := range objs {
 		objAnnotations := obj.GetAnnotations()
 		if objAnnotations == nil {
@@ -108,6 +111,12 @@ func markAsManaged(objs []*unstructured.Unstructured) {
 
 		objAnnotations[annotations.ManagedByODHOperator] = "true"
 		obj.SetAnnotations(objAnnotations)
+
+		err := ctrl.SetControllerReference(owner, obj, scheme)
+		if err != nil {
+			// TODO: propagate errors
+			return
+		}
 	}
 }
 
