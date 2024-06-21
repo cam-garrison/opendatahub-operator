@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/go-multierror"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
@@ -28,6 +29,7 @@ var _ featuresHandler = (*FeaturesHandler)(nil)
 type FeaturesHandler struct {
 	targetNamespace   string
 	source            featurev1.Source
+	owner             metav1.Object
 	features          []*Feature
 	featuresProviders []FeaturesProvider
 }
@@ -43,6 +45,7 @@ func (fh *FeaturesHandler) Add(builders ...*featureBuilder) error {
 		fb := builders[i]
 		feature, err := fb.TargetNamespace(fh.targetNamespace).
 			Source(fh.source).
+			OwnedBy(fh.owner).
 			Create()
 		featureAddErrors = multierror.Append(featureAddErrors, err)
 		fh.features = append(fh.features, feature)
@@ -99,14 +102,16 @@ func ClusterFeaturesHandler(dsci *v1.DSCInitialization, def ...FeaturesProvider)
 	return &FeaturesHandler{
 		targetNamespace:   dsci.Spec.ApplicationsNamespace,
 		source:            featurev1.Source{Type: featurev1.DSCIType, Name: dsci.Name},
+		owner:             dsci,
 		featuresProviders: def,
 	}
 }
 
-func ComponentFeaturesHandler(componentName, targetNamespace string, def ...FeaturesProvider) *FeaturesHandler {
+func ComponentFeaturesHandler(owner metav1.Object, componentName, targetNamespace string, def ...FeaturesProvider) *FeaturesHandler {
 	return &FeaturesHandler{
 		targetNamespace:   targetNamespace,
 		source:            featurev1.Source{Type: featurev1.ComponentType, Name: componentName},
+		owner:             owner,
 		featuresProviders: def,
 	}
 }

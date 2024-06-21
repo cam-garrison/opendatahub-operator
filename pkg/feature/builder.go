@@ -5,9 +5,8 @@ import (
 	"io/fs"
 
 	"github.com/hashicorp/go-multierror"
-	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/pkg/errors"
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/scheme"
 )
 
 type partialBuilder func(f *Feature) error
@@ -22,6 +22,7 @@ type partialBuilder func(f *Feature) error
 type featureBuilder struct {
 	featureName string
 	source      featurev1.Source
+	owner       metav1.Object
 	targetNs    string
 	config      *rest.Config
 	managed     bool
@@ -100,6 +101,14 @@ func (fb *requiresManifestSourceBuilder) Manifests(paths ...string) *featureBuil
 	})
 
 	return fb.featureBuilder
+}
+
+// OwnedBy is used to pass down the owning object in order to set the ownerReference
+// in the corresponding feature tracker.
+func (fb *featureBuilder) OwnedBy(object metav1.Object) *featureBuilder {
+	fb.owner = object
+
+	return fb
 }
 
 // Managed marks the feature as managed by the operator.  This effectively marks all resources which are part of this feature
@@ -183,6 +192,7 @@ func (fb *featureBuilder) Create() (*Feature, error) {
 		Log:     log.Log.WithName("features").WithValues("feature", fb.featureName),
 		fsys:    fb.fsys,
 		source:  &fb.source,
+		owner:   fb.owner,
 	}
 
 	// UsingConfig builder wasn't called while constructing this feature.
@@ -222,8 +232,7 @@ func createClient(config *rest.Config) partialBuilder {
 		}
 
 		var multiErr *multierror.Error
-		s := f.Client.Scheme()
-		multiErr = multierror.Append(multiErr, featurev1.AddToScheme(s), apiextv1.AddToScheme(s), ofapiv1alpha1.AddToScheme(s))
+		_, multiErr = scheme.AddToScheme(f.Client.Scheme())
 
 		return multiErr.ErrorOrNil()
 	}

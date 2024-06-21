@@ -267,7 +267,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, saveErr
 	}
 
-	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, r.DataScienceCluster.DSCISpec,
+	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, r.DataScienceCluster.DSCISpec, instance,
 		cluster.OwnedBy(instance, r.Scheme),
 		cluster.InNamespace(r.DataScienceCluster.DSCISpec.ApplicationsNamespace),
 	); configErr != nil {

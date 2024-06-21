@@ -55,6 +55,7 @@ type Kserve struct {
 	// If no default deployment mode is specified, Kserve will use Serverless mode
 	// +kubebuilder:validation:Enum=Serverless;RawDeployment
 	DefaultDeploymentMode DefaultDeploymentMode `json:"defaultDeploymentMode,omitempty"`
+	owner                 *metav1.Object        // Internal field for owner
 }
 
 func (k *Kserve) OverrideManifests(_ string) error {
@@ -98,6 +99,8 @@ func (k *Kserve) GetComponentName() string {
 func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 	logger logr.Logger, owner metav1.Object, dscispec *dsciv1.DSCInitializationSpec, platform cluster.Platform, _ bool, _ capabilities.PlatformCapabilities) error {
 	l := k.ConfigComponentLogger(logger, ComponentName, dscispec)
+	k.SetOwner(&owner)
+
 	// paramMap for Kserve to use.
 	var imageParamMap = map[string]string{}
 
@@ -110,12 +113,12 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 	monitoringEnabled := dscispec.Monitoring.ManagementState == operatorv1.Managed
 
 	if !enabled {
-		if err := k.removeServerlessFeatures(dscispec); err != nil {
+		if err := k.removeServerlessFeatures(dscispec, owner); err != nil {
 			return err
 		}
 	} else {
 		// Configure dependencies
-		if err := k.configureServerless(cli, dscispec); err != nil {
+		if err := k.configureServerless(cli, dscispec, owner); err != nil {
 			return err
 		}
 		if k.DevFlags != nil {
@@ -133,7 +136,7 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 		}
 	}
 
-	if err := k.configureServiceMesh(cli, dscispec); err != nil {
+	if err := k.configureServiceMesh(cli, dscispec, owner); err != nil {
 		return fmt.Errorf("failed configuring service mesh while reconciling kserve component. cause: %w", err)
 	}
 
@@ -187,9 +190,16 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 }
 
 func (k *Kserve) Cleanup(cli client.Client, dscispec *dsciv1.DSCInitializationSpec) error {
-	if removeServerlessErr := k.removeServerlessFeatures(dscispec); removeServerlessErr != nil {
+	if k.owner == nil {
+		return fmt.Errorf("owner is not set")
+	}
+	if removeServerlessErr := k.removeServerlessFeatures(dscispec, *k.owner); removeServerlessErr != nil {
 		return removeServerlessErr
 	}
 
-	return k.removeServiceMeshConfigurations(cli, dscispec)
+	return k.removeServiceMeshConfigurations(cli, dscispec, *k.owner)
+}
+
+func (k *Kserve) SetOwner(owner *metav1.Object) {
+	k.owner = owner
 }

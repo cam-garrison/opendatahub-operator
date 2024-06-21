@@ -7,6 +7,7 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
@@ -63,6 +64,10 @@ func (f *Feature) getFeatureTracker() (*featurev1.FeatureTracker, error) {
 	tracker.Spec = featurev1.FeatureTrackerSpec{
 		Source:       *f.source,
 		AppNamespace: f.TargetNamespace,
+	}
+
+	if err := ctrl.SetControllerReference(f.owner, tracker, f.Client.Scheme()); err != nil {
+		f.Log.Info("Error setting controller reference", "error", err)
 	}
 
 	err := f.Client.Get(context.Background(), client.ObjectKeyFromObject(tracker), tracker)

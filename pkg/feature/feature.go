@@ -47,6 +47,7 @@ type Feature struct {
 
 	tracker *featurev1.FeatureTracker
 	source  *featurev1.Source
+	owner   metav1.Object
 
 	context   map[string]any
 	manifests []Manifest

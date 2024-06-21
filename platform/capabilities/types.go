@@ -33,7 +33,7 @@ type Availability interface {
 
 type PlatformRegistry interface {
 	Save(c context.Context, cli client.Client, metaOptions ...cluster.MetaOptions) error
-	ConfigureCapabilities(context.Context, client.Client, *dsciv1.DSCInitializationSpec, ...cluster.MetaOptions) error
+	ConfigureCapabilities(context.Context, client.Client, *dsciv1.DSCInitializationSpec, metav1.Object, ...cluster.MetaOptions) error
 	// RemoveCapabilities(context.Context, client.Client, *dsciv1.DSCInitializationSpec) error
 	// authz: apply authorino setup
 	// TODO(after-mvp): when KServe onboarded move authz setup from DSCI controller here
@@ -50,7 +50,13 @@ type Registry struct {
 }
 
 // TODO: include OwnedBy for DSC clean up, both Registry and Handler.
-func (r *Registry) ConfigureCapabilities(ctx context.Context, cli client.Client, dsciSpec *dsciv1.DSCInitializationSpec, metaOptions ...cluster.MetaOptions) error {
+func (r *Registry) ConfigureCapabilities(
+	ctx context.Context,
+	cli client.Client,
+	dsciSpec *dsciv1.DSCInitializationSpec,
+	owner metav1.Object,
+	metaOptions ...cluster.MetaOptions,
+) error {
 	// iterate over all handlers and configure
 
 	handlers := []Handler{&r.authorization}
@@ -85,7 +91,7 @@ func (r *Registry) ConfigureCapabilities(ctx context.Context, cli client.Client,
 
 	var err error
 
-	authInitializer := feature.ComponentFeaturesHandler("Platform", dsciSpec.ApplicationsNamespace, r.definePlatform())
+	authInitializer := feature.ComponentFeaturesHandler(owner, "Platform", dsciSpec.ApplicationsNamespace, r.definePlatform())
 
 	// TODO(mvp): we need to track state if we once were deployed, but now not needed?
 	if isRequired(handlers...) {

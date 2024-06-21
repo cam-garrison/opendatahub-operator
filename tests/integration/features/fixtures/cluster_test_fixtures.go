@@ -108,6 +108,7 @@ func NewDSCInitialization(ns string) *dsciv1.DSCInitialization {
 	return &dsciv1.DSCInitialization{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default-dsci",
+			UID:  "0123",
 		},
 		Spec: dsciv1.DSCInitializationSpec{
 			ApplicationsNamespace: ns,
