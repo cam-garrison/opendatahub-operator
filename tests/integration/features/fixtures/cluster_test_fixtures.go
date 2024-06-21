@@ -97,7 +97,15 @@ func CreateSecret(name, namespace string) func(f *feature.Feature) error {
 }
 
 func GetFeatureTracker(cli client.Client, appNamespace, featureName string) (*featurev1.FeatureTracker, error) {
-	tracker := featurev1.NewFeatureTracker(featureName, appNamespace)
+	tracker := &featurev1.FeatureTracker{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "features.opendatahub.io/v1",
+			Kind:       "FeatureTracker",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: appNamespace + "-" + featureName,
+		},
+	}
 	err := cli.Get(context.Background(), client.ObjectKey{
 		Name: tracker.Name,
 	}, tracker)

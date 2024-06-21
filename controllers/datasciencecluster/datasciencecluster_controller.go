@@ -36,6 +36,7 @@ import (
 	authv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -267,7 +268,16 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, saveErr
 	}
 
-	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, r.DataScienceCluster.DSCISpec,
+	controller := true
+	owner := metav1.OwnerReference{
+		APIVersion: instance.APIVersion,
+		Kind:       instance.Kind,
+		Name:       instance.Name,
+		UID:        instance.UID,
+		Controller: &controller,
+	}
+
+	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, owner, r.DataScienceCluster.DSCISpec,
 		cluster.OwnedBy(instance, r.Scheme),
 		cluster.InNamespace(r.DataScienceCluster.DSCISpec.ApplicationsNamespace),
 	); configErr != nil {

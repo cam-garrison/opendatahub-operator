@@ -16,7 +16,7 @@ const DefaultCertificateSecretName = "knative-serving-cert"
 
 const (
 	servingKey              = "Serving"
-	certificateKey          = "KnativeCertificateSecret"
+	certificateKey          = "KnativeCertificateSecret" // #nosec G101 false positive
 	knativeIngressDomainKey = "KnativeIngressDomain"
 )
 

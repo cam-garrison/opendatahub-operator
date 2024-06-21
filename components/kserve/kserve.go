@@ -5,13 +5,13 @@ package kserve
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"path/filepath"
 	"strings"
 
 	"github.com/go-logr/logr"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
