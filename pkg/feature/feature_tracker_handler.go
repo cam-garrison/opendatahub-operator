@@ -58,7 +58,7 @@ func removeFeatureTracker(f *Feature) error {
 }
 
 func (f *Feature) getFeatureTracker() (*featurev1.FeatureTracker, error) {
-	tracker := featurev1.NewFeatureTracker(f.Name, f.TargetNamespace)
+	tracker := featurev1.NewFeatureTracker(f.Name, f.TargetNamespace, f.owner)
 
 	tracker.Spec = featurev1.FeatureTrackerSpec{
 		Source:       *f.source,

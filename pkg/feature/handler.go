@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/go-multierror"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/resmap"
 
@@ -31,6 +32,7 @@ var _ featuresHandler = (*FeaturesHandler)(nil)
 type FeaturesHandler struct {
 	targetNamespace   string
 	source            featurev1.Source
+	owner             metav1.OwnerReference
 	features          []*Feature
 	featuresProviders []FeaturesProvider
 }
@@ -51,6 +53,7 @@ func (fh *FeaturesHandler) Add(builders ...*featureBuilder) error {
 		fb := builders[i]
 		feature, err := fb.TargetNamespace(fh.targetNamespace).
 			Source(fh.source).
+			OwnedBy(fh.owner).
 			EnrichManifests(&kustomize.PluginsEnricher{Plugins: globalPlugins}).
 			Create()
 		featureAddErrors = multierror.Append(featureAddErrors, err)
@@ -105,17 +108,27 @@ func (fh *FeaturesHandler) Delete() error {
 type FeaturesProvider func(registry FeaturesRegistry) error
 
 func ClusterFeaturesHandler(dsci *v1.DSCInitialization, def ...FeaturesProvider) *FeaturesHandler {
+	controller := true
+	owner := metav1.OwnerReference{
+		APIVersion: dsci.APIVersion,
+		Kind:       dsci.Kind,
+		Name:       dsci.Name,
+		UID:        dsci.UID,
+		Controller: &controller,
+	}
 	return &FeaturesHandler{
 		targetNamespace:   dsci.Spec.ApplicationsNamespace,
 		source:            featurev1.Source{Type: featurev1.DSCIType, Name: dsci.Name},
 		featuresProviders: def,
+		owner:             owner,
 	}
 }
 
-func ComponentFeaturesHandler(componentName, targetNamespace string, def ...FeaturesProvider) *FeaturesHandler {
+func ComponentFeaturesHandler(owner metav1.OwnerReference, componentName, targetNamespace string, def ...FeaturesProvider) *FeaturesHandler {
 	return &FeaturesHandler{
 		targetNamespace:   targetNamespace,
 		source:            featurev1.Source{Type: featurev1.ComponentType, Name: componentName},
+		owner:             owner,
 		featuresProviders: def,
 	}
 }

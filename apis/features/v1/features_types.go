@@ -24,14 +24,15 @@ type FeatureTracker struct {
 }
 
 // NewFeatureTracker instantiate FeatureTracker.
-func NewFeatureTracker(name, appNamespace string) *FeatureTracker {
+func NewFeatureTracker(name, appNamespace string, owner *metav1.OwnerReference) *FeatureTracker {
 	return &FeatureTracker{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "features.opendatahub.io/v1",
 			Kind:       "FeatureTracker",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: appNamespace + "-" + name,
+			Name:            appNamespace + "-" + name,
+			OwnerReferences: []metav1.OwnerReference{*owner},
 		},
 	}
 }

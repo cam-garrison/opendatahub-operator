@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -114,14 +115,14 @@ func (k *Kserve) setDefaultDeploymentMode(ctx context.Context, cli client.Client
 	return nil
 }
 
-func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitializationSpec) error {
+func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.OwnerReference) error {
 	switch k.Serving.ManagementState {
 	case operatorv1.Unmanaged: // Bring your own CR
 		fmt.Println("Serverless CR is not configured by the operator, we won't do anything")
 
 	case operatorv1.Removed: // we remove serving CR
 		fmt.Println("existing Serverless CR (owned by operator) will be removed")
-		if err := k.removeServerlessFeatures(dscispec); err != nil {
+		if err := k.removeServerlessFeatures(dscispec, owner); err != nil {
 			return err
 		}
 
@@ -131,7 +132,7 @@ func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitia
 			return fmt.Errorf("ServiceMesh is need to set to 'Managed' in DSCI CR, it is required by KServe serving field")
 		}
 
-		serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, k.configureServerlessFeatures(dscispec))
+		serverlessFeatures := feature.ComponentFeaturesHandler(owner, k.GetComponentName(), dscispec.ApplicationsNamespace, k.configureServerlessFeatures(dscispec))
 
 		if err := serverlessFeatures.Apply(); err != nil {
 			return err
@@ -140,8 +141,8 @@ func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitia
 	return nil
 }
 
-func (k *Kserve) removeServerlessFeatures(dscispec *dsciv1.DSCInitializationSpec) error {
-	serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, k.configureServerlessFeatures(dscispec))
+func (k *Kserve) removeServerlessFeatures(dscispec *dsciv1.DSCInitializationSpec, owner v1.OwnerReference) error {
+	serverlessFeatures := feature.ComponentFeaturesHandler(owner, k.GetComponentName(), dscispec.ApplicationsNamespace, k.configureServerlessFeatures(dscispec))
 
 	return serverlessFeatures.Delete()
 }

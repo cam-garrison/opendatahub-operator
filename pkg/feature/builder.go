@@ -7,6 +7,7 @@ import (
 	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/pkg/errors"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,6 +24,7 @@ type featureBuilder struct {
 	featureName string
 	managed     bool
 	source      featurev1.Source
+	owner       metav1.OwnerReference
 	targetNs    string
 
 	config *rest.Config
@@ -66,6 +68,14 @@ func (fb *featureBuilder) TargetNamespace(targetNs string) *featureBuilder {
 
 func (fb *featureBuilder) Source(source featurev1.Source) *featureBuilder {
 	fb.source = source
+
+	return fb
+}
+
+// OwnedBy is used to pass down the owning object in order to set the ownerReference
+// in the corresponding feature tracker.
+func (fb *featureBuilder) OwnedBy(object metav1.OwnerReference) *featureBuilder {
+	fb.owner = object
 
 	return fb
 }
@@ -182,6 +192,7 @@ func (fb *featureBuilder) Create() (*Feature, error) {
 		Enabled: true,
 		Log:     log.Log.WithName("features").WithValues("feature", fb.featureName),
 		source:  &fb.source,
+		owner:   &fb.owner,
 	}
 
 	// UsingConfig builder wasn't called while constructing this feature.
