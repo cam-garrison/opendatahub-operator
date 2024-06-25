@@ -60,6 +60,7 @@ linters:
     - wrapcheck # check if this is required. Prevents direct return of err.
 
     # Need to check
+    - ireturn
     - nlreturn # [too strict and mostly code is not more readable] checks for a new line before return and branch statements to increase code clarity
     - goerr113 # [too strict] checks the errors handling expressions
     - contextcheck # Requires to pass context to all function.

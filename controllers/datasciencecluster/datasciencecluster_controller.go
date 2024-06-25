@@ -36,7 +36,6 @@ import (
 	authv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -140,7 +139,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 		}
 		for _, component := range allComponents {
-			if err := component.Cleanup(r.Client, r.DataScienceCluster.DSCISpec); err != nil {
+			if err := component.Cleanup(r.Client, instance, r.DataScienceCluster.DSCISpec); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -196,7 +195,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 		// TODO(mvp) undeploy odh-platform
 
 		for _, component := range allComponents {
-			if err := component.Cleanup(r.Client, r.DataScienceCluster.DSCISpec); err != nil {
+			if err := component.Cleanup(r.Client, instance, r.DataScienceCluster.DSCISpec); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -268,16 +267,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, saveErr
 	}
 
-	controller := true
-	owner := metav1.OwnerReference{
-		APIVersion: instance.APIVersion,
-		Kind:       instance.Kind,
-		Name:       instance.Name,
-		UID:        instance.UID,
-		Controller: &controller,
-	}
-
-	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, owner, r.DataScienceCluster.DSCISpec,
+	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, instance, r.DataScienceCluster.DSCISpec,
 		cluster.OwnedBy(instance, r.Scheme),
 		cluster.InNamespace(r.DataScienceCluster.DSCISpec.ApplicationsNamespace),
 	); configErr != nil {

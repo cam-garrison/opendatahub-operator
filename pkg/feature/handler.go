@@ -32,7 +32,7 @@ var _ featuresHandler = (*FeaturesHandler)(nil)
 type FeaturesHandler struct {
 	targetNamespace   string
 	source            featurev1.Source
-	owner             metav1.OwnerReference
+	owner             metav1.Object
 	features          []*Feature
 	featuresProviders []FeaturesProvider
 }
@@ -108,23 +108,15 @@ func (fh *FeaturesHandler) Delete() error {
 type FeaturesProvider func(registry FeaturesRegistry) error
 
 func ClusterFeaturesHandler(dsci *v1.DSCInitialization, def ...FeaturesProvider) *FeaturesHandler {
-	controller := true
-	owner := metav1.OwnerReference{
-		APIVersion: dsci.APIVersion,
-		Kind:       dsci.Kind,
-		Name:       dsci.Name,
-		UID:        dsci.UID,
-		Controller: &controller,
-	}
 	return &FeaturesHandler{
 		targetNamespace:   dsci.Spec.ApplicationsNamespace,
 		source:            featurev1.Source{Type: featurev1.DSCIType, Name: dsci.Name},
 		featuresProviders: def,
-		owner:             owner,
+		owner:             dsci,
 	}
 }
 
-func ComponentFeaturesHandler(owner metav1.OwnerReference, componentName, targetNamespace string, def ...FeaturesProvider) *FeaturesHandler {
+func ComponentFeaturesHandler(componentName, targetNamespace string, owner metav1.Object, def ...FeaturesProvider) *FeaturesHandler {
 	return &FeaturesHandler{
 		targetNamespace:   targetNamespace,
 		source:            featurev1.Source{Type: featurev1.ComponentType, Name: componentName},

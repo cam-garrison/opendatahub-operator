@@ -46,7 +46,7 @@ type Feature struct {
 
 	tracker *featurev1.FeatureTracker
 	source  *featurev1.Source
-	owner   *metav1.OwnerReference
+	owner   *metav1.Object // TODO object instead
 
 	data map[string]any
 

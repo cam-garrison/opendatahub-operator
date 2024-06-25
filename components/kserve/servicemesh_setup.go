@@ -15,10 +15,10 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature/servicemesh"
 )
 
-func (k *Kserve) configureServiceMesh(cli client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.OwnerReference) error {
+func (k *Kserve) configureServiceMesh(cli client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.Object) error {
 	if dscispec.ServiceMesh != nil {
 		if dscispec.ServiceMesh.ManagementState == operatorv1.Managed && k.GetManagementState() == operatorv1.Managed {
-			serviceMeshInitializer := feature.ComponentFeaturesHandler(owner, k.GetComponentName(), dscispec.ApplicationsNamespace, k.defineServiceMeshFeatures(cli, dscispec))
+			serviceMeshInitializer := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, owner, k.defineServiceMeshFeatures(cli, dscispec))
 			return serviceMeshInitializer.Apply()
 		}
 		if dscispec.ServiceMesh.ManagementState == operatorv1.Unmanaged && k.GetManagementState() == operatorv1.Managed {
@@ -29,8 +29,8 @@ func (k *Kserve) configureServiceMesh(cli client.Client, dscispec *dsciv1.DSCIni
 	return k.removeServiceMeshConfigurations(cli, dscispec, owner)
 }
 
-func (k *Kserve) removeServiceMeshConfigurations(cli client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.OwnerReference) error {
-	serviceMeshInitializer := feature.ComponentFeaturesHandler(owner, k.GetComponentName(), dscispec.ApplicationsNamespace, k.defineServiceMeshFeatures(cli, dscispec))
+func (k *Kserve) removeServiceMeshConfigurations(cli client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.Object) error {
+	serviceMeshInitializer := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, owner, k.defineServiceMeshFeatures(cli, dscispec))
 	return serviceMeshInitializer.Delete()
 }
 

@@ -11,6 +11,7 @@ import (
 
 	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/controllers/status"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 )
 
 // withConditionReasonError is a wrapper around an error which provides a reason for a feature condition.
@@ -32,6 +33,7 @@ func (e *withConditionReasonError) Error() string {
 // All resources which particular feature is composed of will have this object attached as an OwnerReference.
 func (f *Feature) createFeatureTracker() error {
 	tracker, err := f.getFeatureTracker()
+
 	if k8serrors.IsNotFound(err) {
 		if err := f.Client.Create(context.TODO(), tracker); err != nil {
 			return err
@@ -42,6 +44,12 @@ func (f *Feature) createFeatureTracker() error {
 
 	if gvkErr := f.ensureGVKSet(tracker); gvkErr != nil {
 		return gvkErr
+	}
+
+	tracker.SetOwnerReferences(cluster.ToOwnerReference(*f.owner, f.Log))
+	err = f.Client.Update(context.TODO(), tracker)
+	if err != nil {
+		return err
 	}
 
 	f.tracker = tracker
@@ -58,7 +66,7 @@ func removeFeatureTracker(f *Feature) error {
 }
 
 func (f *Feature) getFeatureTracker() (*featurev1.FeatureTracker, error) {
-	tracker := featurev1.NewFeatureTracker(f.Name, f.TargetNamespace, f.owner)
+	tracker := featurev1.NewFeatureTracker(f.Name, f.TargetNamespace)
 
 	tracker.Spec = featurev1.FeatureTrackerSpec{
 		Source:       *f.source,

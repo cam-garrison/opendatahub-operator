@@ -2,6 +2,7 @@ package features_test
 
 import (
 	"fmt"
+	"github.com/opendatahub-io/opendatahub-operator/v2/tests/envtestutil"
 
 	conditionsv1 "github.com/openshift/custom-resource-status/conditions/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -22,11 +23,22 @@ var _ = Describe("Feature tracking capability", func() {
 	const appNamespace = "default"
 
 	var (
-		dsci *dsciv1.DSCInitialization
+		dsci          *dsciv1.DSCInitialization
+		objectCleaner *envtestutil.Cleaner
 	)
 
 	BeforeEach(func() {
-		dsci = fixtures.NewDSCInitialization("default")
+		objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
+
+		dsci = fixtures.NewDSCInitialization(appNamespace)
+		err := fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		objectCleaner.DeleteAll(dsci)
 	})
 
 	Context("Reporting progress when applying Feature", func() {

@@ -9,7 +9,7 @@ import (
 )
 
 // CreateNamespaceApplierPlugin creates a plugin to ensure resources have the specified target namespace.
-func CreateNamespaceApplierPlugin(targetNamespace string) resmap.Transformer { //nolint:ireturn //reason returning struct conflicts due to pointer receiver
+func CreateNamespaceApplierPlugin(targetNamespace string) resmap.Transformer {
 	return &builtins.NamespaceTransformerPlugin{
 		ObjectMeta: types.ObjectMeta{
 			Name:      "odh-namespace-plugin",

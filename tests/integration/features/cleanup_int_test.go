@@ -28,14 +28,21 @@ var _ = Describe("feature cleanup", func() {
 		)
 
 		var (
-			dsci        *dsciv1.DSCInitialization
-			namespace   string
-			testFeature *feature.Feature
+			dsci          *dsciv1.DSCInitialization
+			namespace     string
+			testFeature   *feature.Feature
+			objectCleaner *envtestutil.Cleaner
 		)
 
 		BeforeAll(func() {
+			objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
+
 			namespace = envtestutil.AppendRandomNameTo("test-secret-ownership")
 			dsci = fixtures.NewDSCInitialization(namespace)
+			err := fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+			Expect(err).ToNot(HaveOccurred())
+			dsci.APIVersion = fixtures.DsciAPIVersion
+			dsci.Kind = fixtures.DsciKind
 			var errSecretCreation error
 			testFeature, errSecretCreation = feature.Define(featureName).
 				TargetNamespace(dsci.Spec.ApplicationsNamespace).
@@ -43,6 +50,7 @@ var _ = Describe("feature cleanup", func() {
 					Type: featurev1.DSCIType,
 					Name: dsci.Name,
 				}).
+				OwnedBy(dsci).
 				UsingConfig(envTest.Config).
 				PreConditions(
 					feature.CreateNamespaceIfNotExists(namespace),
@@ -52,6 +60,10 @@ var _ = Describe("feature cleanup", func() {
 
 			Expect(errSecretCreation).ToNot(HaveOccurred())
 
+		})
+
+		AfterAll(func() {
+			objectCleaner.DeleteAll(dsci)
 		})
 
 		It("should successfully create resource and associated feature tracker", func() {

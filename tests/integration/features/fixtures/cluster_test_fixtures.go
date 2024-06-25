@@ -44,6 +44,13 @@ func createOrUpdateSubscription(client client.Client, subscription *ofapiv1alpha
 	return err
 }
 
+func CreateOrUpdateDsci(client client.Client, dsci *dsciv1.DSCInitialization) error {
+	_, err := controllerutil.CreateOrUpdate(context.Background(), client, dsci, func() error {
+		return nil
+	})
+	return err
+}
+
 func NewNamespace(name string) *v1.Namespace {
 	return &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -115,6 +122,10 @@ func GetFeatureTracker(cli client.Client, appNamespace, featureName string) (*fe
 
 func NewDSCInitialization(ns string) *dsciv1.DSCInitialization {
 	return &dsciv1.DSCInitialization{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "dscinitialization.opendatahub.io/v1",
+			Kind:       "DSCInitialization",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default-dsci",
 		},

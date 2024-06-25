@@ -40,10 +40,15 @@ var _ = Describe("Applying resources", func() {
 
 		dsci = fixtures.NewDSCInitialization(nsName)
 		dsci.Spec.ServiceMesh.ControlPlane.Namespace = namespace.Name
+		err = fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		Expect(err).ToNot(HaveOccurred())
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
 	})
 
 	AfterEach(func() {
 		objectCleaner.DeleteAll(namespace)
+		objectCleaner.DeleteAll(dsci)
 	})
 
 	It("should be able to process an embedded YAML file", func() {
@@ -140,6 +145,7 @@ metadata:
 		cfgMapFeature, errFeatureCreate := feature.Define("create-cfg-map").
 			UsingConfig(envTest.Config).
 			TargetNamespace(targetNamespace).
+			OwnedBy(dsci).
 			Manifests(
 				kustomize.Location(kustomizeTestFixture()).
 					WithPlugins(plugins.CreateNamespaceApplierPlugin(targetNamespace)),
@@ -165,6 +171,7 @@ metadata:
 		createCfgMapFeature, errCreateFeature := feature.Define("create-cfg-map").
 			UsingConfig(envTest.Config).
 			TargetNamespace(targetNamespace).
+			OwnedBy(dsci).
 			EnrichManifests(&kustomize.PluginsEnricher{Plugins: []resmap.Transformer{plugins.CreateNamespaceApplierPlugin(targetNamespace)}}).
 			Manifests(
 				kustomize.Location(kustomizeTestFixture()),

@@ -41,12 +41,12 @@ var _ DataProvider[any] = (*DataProviderWithDefault[any])(nil)
 var _ Defaulter[any] = (*DataProviderWithDefault[any])(nil)
 
 // Get returns Value() of Defaulter and ensures DataProviderWithDefault can be used as DataProviderFunc.
-func (d DataProviderWithDefault[T]) Get(_ context.Context, _ client.Client) (T, error) { //nolint:ireturn //reason: returns generic T
+func (d DataProviderWithDefault[T]) Get(_ context.Context, _ client.Client) (T, error) {
 	return d.value, nil
 }
 
 // Value returns actual value stored by the provider.
-func (d DataProviderWithDefault[T]) Value() T { //nolint:ireturn //reason: returns generic T
+func (d DataProviderWithDefault[T]) Value() T {
 	return d.value
 }
 

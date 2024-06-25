@@ -41,6 +41,10 @@ var _ = Describe("Applying and updating resources", func() {
 
 		dsci = fixtures.NewDSCInitialization(testNamespace)
 		dsci.Spec.ServiceMesh.ControlPlane.Namespace = namespace.Name
+		err = fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	When("a feature is managed", func() {
@@ -134,7 +138,7 @@ var _ = Describe("Applying and updating resources", func() {
 	})
 
 	AfterEach(func() {
-		objectCleaner.DeleteAll(namespace)
+		objectCleaner.DeleteAll(namespace, dsci)
 	})
 })
 

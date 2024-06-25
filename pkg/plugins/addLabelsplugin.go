@@ -16,7 +16,7 @@ import (
 //   - It adds labels to the "metadata/labels" path for all resource kinds.
 //   - It adds labels to the "spec/template/metadata/labels" and "spec/selector/matchLabels" paths
 //     for resources of kind "Deployment".
-func CreateAddLabelsPlugin(componentName string) resmap.Transformer { //nolint:ireturn //reason returning struct conflicts due to pointer receiver
+func CreateAddLabelsPlugin(componentName string) resmap.Transformer {
 	return &builtins.LabelTransformerPlugin{
 		Labels: map[string]string{
 			labels.ODH.Component(componentName): "true",

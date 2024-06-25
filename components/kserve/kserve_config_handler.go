@@ -115,7 +115,7 @@ func (k *Kserve) setDefaultDeploymentMode(ctx context.Context, cli client.Client
 	return nil
 }
 
-func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.OwnerReference) error {
+func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitializationSpec, owner v1.Object) error {
 	switch k.Serving.ManagementState {
 	case operatorv1.Unmanaged: // Bring your own CR
 		fmt.Println("Serverless CR is not configured by the operator, we won't do anything")
@@ -132,7 +132,7 @@ func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitia
 			return fmt.Errorf("ServiceMesh is need to set to 'Managed' in DSCI CR, it is required by KServe serving field")
 		}
 
-		serverlessFeatures := feature.ComponentFeaturesHandler(owner, k.GetComponentName(), dscispec.ApplicationsNamespace, k.configureServerlessFeatures(dscispec))
+		serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, owner, k.configureServerlessFeatures(dscispec))
 
 		if err := serverlessFeatures.Apply(); err != nil {
 			return err
@@ -141,8 +141,8 @@ func (k *Kserve) configureServerless(_ client.Client, dscispec *dsciv1.DSCInitia
 	return nil
 }
 
-func (k *Kserve) removeServerlessFeatures(dscispec *dsciv1.DSCInitializationSpec, owner v1.OwnerReference) error {
-	serverlessFeatures := feature.ComponentFeaturesHandler(owner, k.GetComponentName(), dscispec.ApplicationsNamespace, k.configureServerlessFeatures(dscispec))
+func (k *Kserve) removeServerlessFeatures(dscispec *dsciv1.DSCInitializationSpec, owner v1.Object) error {
+	serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, owner, k.configureServerlessFeatures(dscispec))
 
 	return serverlessFeatures.Delete()
 }

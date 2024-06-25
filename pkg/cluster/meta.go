@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -40,6 +41,23 @@ func OwnedBy(owner metav1.Object, scheme *runtime.Scheme) MetaOptions {
 	return func(obj metav1.Object) error {
 		return controllerutil.SetOwnerReference(owner, obj, scheme)
 	}
+}
+
+func ToOwnerReference(obj metav1.Object, log logr.Logger) []metav1.OwnerReference {
+	runtimeOwner, ok := obj.(runtime.Object)
+	if !ok {
+		log.Info("owner does not implement runtime.Object", "object name:", obj.GetName())
+	}
+
+	gvk := runtimeOwner.GetObjectKind().GroupVersionKind()
+
+	ownerRef := metav1.OwnerReference{
+		APIVersion: gvk.GroupVersion().String(),
+		Kind:       gvk.Kind,
+		Name:       obj.GetName(),
+		UID:        obj.GetUID(),
+	}
+	return []metav1.OwnerReference{ownerRef}
 }
 
 func WithLabels(labels ...string) MetaOptions {

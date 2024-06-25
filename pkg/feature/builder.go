@@ -24,7 +24,7 @@ type featureBuilder struct {
 	featureName string
 	managed     bool
 	source      featurev1.Source
-	owner       metav1.OwnerReference
+	owner       metav1.Object
 	targetNs    string
 
 	config *rest.Config
@@ -74,7 +74,7 @@ func (fb *featureBuilder) Source(source featurev1.Source) *featureBuilder {
 
 // OwnedBy is used to pass down the owning object in order to set the ownerReference
 // in the corresponding feature tracker.
-func (fb *featureBuilder) OwnedBy(object metav1.OwnerReference) *featureBuilder {
+func (fb *featureBuilder) OwnedBy(object metav1.Object) *featureBuilder {
 	fb.owner = object
 
 	return fb

@@ -33,15 +33,15 @@ var _ = Describe("Service Mesh setup", func() {
 	)
 
 	BeforeEach(func() {
-		c, err := client.New(envTest.Config, client.Options{})
-		Expect(err).ToNot(HaveOccurred())
-		objectCleaner = envtestutil.CreateCleaner(c, envTest.Config, fixtures.Timeout, fixtures.Interval)
+		objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
 
 		namespace := envtestutil.AppendRandomNameTo("service-mesh-settings")
 
 		dsci = fixtures.NewDSCInitialization(namespace)
-
-		Expect(err).ToNot(HaveOccurred())
+		err := fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("preconditions", func() {
@@ -81,7 +81,7 @@ var _ = Describe("Service Mesh setup", func() {
 				})
 
 				AfterEach(func() {
-					objectCleaner.DeleteAll(smcpCrdObj)
+					objectCleaner.DeleteAll(smcpCrdObj, dsci)
 				})
 
 				It("should succeed using precondition check", func() {
@@ -166,39 +166,44 @@ var _ = Describe("Service Mesh setup", func() {
 
 				var (
 					objectCleaner   *envtestutil.Cleaner
-					dsci            *dsciv1.DSCInitialization
+					dsciTestNs      *dsciv1.DSCInitialization
 					serviceMeshSpec *infrav1.ServiceMeshSpec
 					smcpCrdObj      *apiextensionsv1.CustomResourceDefinition
-					namespace       = "test-ns"
+					testNs          = "test-ns"
 					name            = "minimal"
 				)
 
 				BeforeEach(func() {
 					smcpCrdObj = installServiceMeshCRD()
 					objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
-					dsci = fixtures.NewDSCInitialization(namespace)
+					objectCleaner.DeleteAll(dsci)
+					dsciTestNs = fixtures.NewDSCInitialization(testNs)
+					err := fixtures.CreateOrUpdateDsci(envTestClient, dsciTestNs)
+					dsciTestNs.APIVersion = fixtures.DsciAPIVersion
+					dsciTestNs.Kind = fixtures.DsciKind
+					Expect(err).NotTo(HaveOccurred())
 
-					serviceMeshSpec = dsci.Spec.ServiceMesh
+					serviceMeshSpec = dsciTestNs.Spec.ServiceMesh
 
 					serviceMeshSpec.ControlPlane.Name = name
-					serviceMeshSpec.ControlPlane.Namespace = namespace
+					serviceMeshSpec.ControlPlane.Namespace = testNs
 				})
 
 				AfterEach(func() {
-					objectCleaner.DeleteAll(smcpCrdObj)
+					objectCleaner.DeleteAll(smcpCrdObj, dsciTestNs)
 				})
 
 				It("should be able to remove external provider on cleanup", func() {
 					// given
-					ns := fixtures.NewNamespace(namespace)
+					ns := fixtures.NewNamespace(testNs)
 					Expect(envTestClient.Create(context.Background(), ns)).To(Succeed())
 					defer objectCleaner.DeleteAll(ns)
 
-					serviceMeshSpec.Auth.Namespace = "auth-provider"
+					dsciTestNs.Spec.ServiceMesh.Auth.Namespace = "auth-provider"
 
-					createServiceMeshControlPlane(name, namespace)
+					createServiceMeshControlPlane(name, testNs)
 
-					handler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+					handler := feature.ClusterFeaturesHandler(dsciTestNs, func(registry feature.FeaturesRegistry) error {
 						return registry.Add(feature.Define("control-plane-with-external-authz-provider").
 							UsingConfig(envTest.Config).
 							Manifests(
@@ -206,10 +211,10 @@ var _ = Describe("Service Mesh setup", func() {
 									Include(path.Join("templates", "mesh-authz-ext-provider.patch.tmpl.yaml")),
 							).
 							WithData(
-								servicemesh.FeatureData.Authorization.All(&dsci.Spec)...,
+								servicemesh.FeatureData.Authorization.All(&dsciTestNs.Spec)...,
 							).
 							WithData(
-								servicemesh.FeatureData.ControlPlane.Create(&dsci.Spec).AsAction(),
+								servicemesh.FeatureData.ControlPlane.Create(&dsciTestNs.Spec).AsAction(),
 							).
 							OnDelete(
 								servicemesh.RemoveExtensionProvider,
@@ -219,7 +224,7 @@ var _ = Describe("Service Mesh setup", func() {
 					// when
 					By("verifying extension provider has been added after applying feature", func() {
 						Expect(handler.Apply()).To(Succeed())
-						serviceMeshControlPlane, err := getServiceMeshControlPlane(namespace, name)
+						serviceMeshControlPlane, err := getServiceMeshControlPlane(testNs, name)
 						Expect(err).ToNot(HaveOccurred())
 
 						extensionProviders, found, err := unstructured.NestedSlice(serviceMeshControlPlane.Object, "spec", "techPreview", "meshConfig", "extensionProviders")
@@ -240,11 +245,11 @@ var _ = Describe("Service Mesh setup", func() {
 					})
 
 					// then
-					By("verifying that extension provider has been removed and namespace is gone too", func() {
+					By("verifying that extension provider has been removed and testNs is gone too", func() {
 						Expect(handler.Delete()).To(Succeed())
 						Eventually(func() []any {
 
-							serviceMeshControlPlane, err := getServiceMeshControlPlane(namespace, name)
+							serviceMeshControlPlane, err := getServiceMeshControlPlane(testNs, name)
 							Expect(err).ToNot(HaveOccurred())
 
 							extensionProviders, found, err := unstructured.NestedSlice(serviceMeshControlPlane.Object, "spec", "techPreview", "meshConfig", "extensionProviders")

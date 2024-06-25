@@ -11,7 +11,6 @@ import (
 	"github.com/go-logr/logr"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
@@ -56,7 +55,6 @@ type Kserve struct {
 	// This field is optional. If no default deployment mode is specified, Kserve will use Serverless mode.
 	// +kubebuilder:validation:Enum=Serverless;RawDeployment
 	DefaultDeploymentMode DefaultDeploymentMode `json:"defaultDeploymentMode,omitempty"`
-	owner                 *metav1.OwnerReference
 }
 
 func (k *Kserve) OverrideManifests(_ string) error {
@@ -108,34 +106,16 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 		"odh-model-controller": "RELATED_IMAGE_ODH_MODEL_CONTROLLER_IMAGE",
 	}
 
-	// ownerRef to be propagated to FeatureTracker
-
-	runtimeOwner, ok := owner.(runtime.Object)
-	if !ok {
-		return fmt.Errorf("owner does not implement runtime.Object")
-	}
-
-	// Retrieve the GroupVersionKind from the runtime.Object
-	gvk := runtimeOwner.GetObjectKind().GroupVersionKind()
-
-	ownerRef := metav1.OwnerReference{
-		APIVersion: gvk.GroupVersion().String(),
-		Kind:       gvk.Kind,
-		Name:       owner.GetName(),
-		UID:        owner.GetUID(),
-	}
-	k.SetOwner(&ownerRef)
-
 	enabled := k.GetManagementState() == operatorv1.Managed
 	monitoringEnabled := dscispec.Monitoring.ManagementState == operatorv1.Managed
 
 	if !enabled {
-		if err := k.removeServerlessFeatures(dscispec, ownerRef); err != nil {
+		if err := k.removeServerlessFeatures(dscispec, owner); err != nil {
 			return err
 		}
 	} else {
 		// Configure dependencies
-		if err := k.configureServerless(cli, dscispec, ownerRef); err != nil {
+		if err := k.configureServerless(cli, dscispec, owner); err != nil {
 			return err
 		}
 		if k.DevFlags != nil {
@@ -153,7 +133,7 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 		}
 	}
 
-	if err := k.configureServiceMesh(cli, dscispec, ownerRef); err != nil {
+	if err := k.configureServiceMesh(cli, dscispec, owner); err != nil {
 		return fmt.Errorf("failed configuring service mesh while reconciling kserve component. cause: %w", err)
 	}
 
@@ -206,18 +186,10 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 	return nil
 }
 
-func (k *Kserve) Cleanup(cli client.Client, dscispec *dsciv1.DSCInitializationSpec) error {
-	if k.owner == nil {
-		return fmt.Errorf("owner is not set")
-	}
-
-	if removeServerlessErr := k.removeServerlessFeatures(dscispec, *k.owner); removeServerlessErr != nil {
+func (k *Kserve) Cleanup(cli client.Client, owner metav1.Object, dscispec *dsciv1.DSCInitializationSpec) error {
+	if removeServerlessErr := k.removeServerlessFeatures(dscispec, owner); removeServerlessErr != nil {
 		return removeServerlessErr
 	}
 
-	return k.removeServiceMeshConfigurations(cli, dscispec, *k.owner)
-}
-
-func (k *Kserve) SetOwner(owner *metav1.OwnerReference) {
-	k.owner = owner
+	return k.removeServiceMeshConfigurations(cli, dscispec, owner)
 }
