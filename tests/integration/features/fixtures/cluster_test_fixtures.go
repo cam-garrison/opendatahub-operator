@@ -44,6 +44,13 @@ func createOrUpdateSubscription(ctx context.Context, client client.Client, subsc
 	return err
 }
 
+func CreateOrUpdateDsci(client client.Client, dsci *dsciv1.DSCInitialization) error {
+	_, err := controllerutil.CreateOrUpdate(context.Background(), client, dsci, func() error {
+		return nil
+	})
+	return err
+}
+
 func NewNamespace(name string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{

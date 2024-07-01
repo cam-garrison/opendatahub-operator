@@ -24,6 +24,7 @@ var _ = Describe("Applying and updating resources", func() {
 	var (
 		testNamespace   string
 		namespace       *corev1.Namespace
+		istioNamespace  *corev1.Namespace
 		objectCleaner   *envtestutil.Cleaner
 		dsci            *dsciv1.DSCInitialization
 		dummyAnnotation string
@@ -38,9 +39,15 @@ var _ = Describe("Applying and updating resources", func() {
 		var err error
 		namespace, err = cluster.CreateNamespace(ctx, envTestClient, testNamespace)
 		Expect(err).ToNot(HaveOccurred())
+		istioNamespace, err = cluster.CreateNamespace(ctx, envTestClient, "istio-system")
+		Expect(err).ToNot(HaveOccurred())
 
 		dsci = fixtures.NewDSCInitialization(testNamespace)
 		dsci.Spec.ServiceMesh.ControlPlane.Namespace = namespace.Name
+		err = fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	When("a feature is managed", func() {
@@ -134,7 +141,7 @@ var _ = Describe("Applying and updating resources", func() {
 	})
 
 	AfterEach(func(ctx context.Context) {
-		objectCleaner.DeleteAll(ctx, namespace)
+		objectCleaner.DeleteAll(ctx, namespace, istioNamespace, dsci)
 	})
 })
 

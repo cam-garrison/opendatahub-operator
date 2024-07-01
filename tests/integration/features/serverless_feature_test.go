@@ -41,6 +41,10 @@ var _ = Describe("Serverless feature", func() {
 		objectCleaner = envtestutil.CreateCleaner(c, envTest.Config, fixtures.Timeout, fixtures.Interval)
 
 		dsci = fixtures.NewDSCInitialization("default")
+		err = fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
 		kserveComponent = &kserve.Kserve{}
 	})
 
@@ -50,7 +54,7 @@ var _ = Describe("Serverless feature", func() {
 
 			It("should fail on precondition check", func(ctx context.Context) {
 				// given
-				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, func(registry feature.FeaturesRegistry) error {
+				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, dsci, func(registry feature.FeaturesRegistry) error {
 					verificationFeatureErr := registry.Add(
 						feature.Define("no-serverless-operator-check").
 							UsingConfig(envTest.Config).
@@ -97,7 +101,7 @@ var _ = Describe("Serverless feature", func() {
 
 			It("should succeed checking operator installation using precondition", func(ctx context.Context) {
 				// when
-				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, func(registry feature.FeaturesRegistry) error {
+				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, dsci, func(registry feature.FeaturesRegistry) error {
 					verificationFeatureErr := registry.Add(
 						feature.Define("serverless-operator-check").
 							UsingConfig(envTest.Config).
@@ -115,7 +119,7 @@ var _ = Describe("Serverless feature", func() {
 
 			It("should succeed if serving is not installed for KNative serving precondition", func(ctx context.Context) {
 				// when
-				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, func(registry feature.FeaturesRegistry) error {
+				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, dsci, func(registry feature.FeaturesRegistry) error {
 					verificationFeatureErr := registry.Add(
 						feature.Define("no-serving-installed-yet").
 							UsingConfig(envTest.Config).
@@ -144,7 +148,7 @@ var _ = Describe("Serverless feature", func() {
 				Expect(envTestClient.Create(ctx, knativeServing)).To(Succeed())
 
 				// when
-				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, func(registry feature.FeaturesRegistry) error {
+				featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, dsci, func(registry feature.FeaturesRegistry) error {
 					verificationFeatureErr := registry.Add(
 						feature.Define("serving-already-installed").
 							UsingConfig(envTest.Config).
@@ -279,7 +283,7 @@ var _ = Describe("Serverless feature", func() {
 			kserveComponent.Serving.IngressGateway.Certificate.Type = infrav1.SelfSigned
 			kserveComponent.Serving.IngressGateway.Domain = fixtures.TestDomainFooCom
 
-			featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, dsci, func(registry feature.FeaturesRegistry) error {
 				verificationFeatureErr := registry.Add(
 					feature.Define("tls-secret-creation").
 						UsingConfig(envTest.Config).
@@ -319,7 +323,7 @@ var _ = Describe("Serverless feature", func() {
 			// given
 			kserveComponent.Serving.IngressGateway.Certificate.Type = infrav1.Provided
 			kserveComponent.Serving.IngressGateway.Domain = fixtures.TestDomainFooCom
-			featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ComponentFeaturesHandler(kserveComponent.GetComponentName(), dsci.Spec.ApplicationsNamespace, dsci, func(registry feature.FeaturesRegistry) error {
 				verificationFeatureErr := registry.Add(
 					feature.Define("tls-secret-creation").
 						UsingConfig(envTest.Config).

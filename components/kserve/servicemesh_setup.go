@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	operatorv1 "github.com/openshift/api/operator/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -15,10 +17,10 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature/servicemesh"
 )
 
-func (k *Kserve) configureServiceMesh(ctx context.Context, cli client.Client, dscispec *dsciv1.DSCInitializationSpec) error {
+func (k *Kserve) configureServiceMesh(ctx context.Context, cli client.Client, owner metav1.Object, dscispec *dsciv1.DSCInitializationSpec) error {
 	if dscispec.ServiceMesh != nil {
 		if dscispec.ServiceMesh.ManagementState == operatorv1.Managed && k.GetManagementState() == operatorv1.Managed {
-			serviceMeshInitializer := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, k.defineServiceMeshFeatures(ctx, cli, dscispec))
+			serviceMeshInitializer := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, owner, k.defineServiceMeshFeatures(ctx, cli, dscispec))
 			return serviceMeshInitializer.Apply(ctx)
 		}
 		if dscispec.ServiceMesh.ManagementState == operatorv1.Unmanaged && k.GetManagementState() == operatorv1.Managed {
@@ -26,11 +28,11 @@ func (k *Kserve) configureServiceMesh(ctx context.Context, cli client.Client, ds
 		}
 	}
 
-	return k.removeServiceMeshConfigurations(ctx, cli, dscispec)
+	return k.removeServiceMeshConfigurations(ctx, cli, owner, dscispec)
 }
 
-func (k *Kserve) removeServiceMeshConfigurations(ctx context.Context, cli client.Client, dscispec *dsciv1.DSCInitializationSpec) error {
-	serviceMeshInitializer := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, k.defineServiceMeshFeatures(ctx, cli, dscispec))
+func (k *Kserve) removeServiceMeshConfigurations(ctx context.Context, cli client.Client, owner metav1.Object, dscispec *dsciv1.DSCInitializationSpec) error {
+	serviceMeshInitializer := feature.ComponentFeaturesHandler(k.GetComponentName(), dscispec.ApplicationsNamespace, owner, k.defineServiceMeshFeatures(ctx, cli, dscispec))
 	return serviceMeshInitializer.Delete(ctx)
 }
 

@@ -140,7 +140,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 		}
 		for _, component := range allComponents {
-			if err := component.Cleanup(ctx, r.Client, r.DataScienceCluster.DSCISpec); err != nil {
+			if err := component.Cleanup(ctx, r.Client, instance, r.DataScienceCluster.DSCISpec); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -196,7 +196,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 		// TODO(mvp) undeploy odh-platform
 
 		for _, component := range allComponents {
-			if err := component.Cleanup(ctx, r.Client, r.DataScienceCluster.DSCISpec); err != nil {
+			if err := component.Cleanup(ctx, r.Client, instance, r.DataScienceCluster.DSCISpec); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -268,7 +268,7 @@ func (r *DataScienceClusterReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, saveErr
 	}
 
-	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, r.DataScienceCluster.DSCISpec,
+	if configErr := capabilitiesRegistry.ConfigureCapabilities(ctx, r.Client, instance, r.DataScienceCluster.DSCISpec,
 		cluster.OwnedBy(instance, r.Scheme),
 		cluster.InNamespace(r.DataScienceCluster.DSCISpec.ApplicationsNamespace),
 	); configErr != nil {
