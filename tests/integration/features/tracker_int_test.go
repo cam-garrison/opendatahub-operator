@@ -3,7 +3,6 @@ package features_test
 import (
 	"context"
 	"errors"
-	"github.com/opendatahub-io/opendatahub-operator/v2/tests/envtestutil"
 
 	conditionsv1 "github.com/openshift/custom-resource-status/conditions/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +11,7 @@ import (
 	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/controllers/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature"
+	"github.com/opendatahub-io/opendatahub-operator/v2/tests/envtestutil"
 	"github.com/opendatahub-io/opendatahub-operator/v2/tests/integration/features/fixtures"
 
 	. "github.com/onsi/ginkgo/v2"

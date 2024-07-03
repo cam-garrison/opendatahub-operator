@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-
 	"github.com/hashicorp/go-multierror"
 	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/pkg/errors"
