@@ -105,27 +105,19 @@ func (m *Manifest) Process(data any) ([]*unstructured.Unstructured, error) {
 
 	resources := string(content)
 
-	if isTemplate(m.path) {
-		tmpl, err := template.New(m.name).
-			Option("missingkey=error").
-			Parse(string(content))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse template: %w", err)
-		}
-
-		var buffer bytes.Buffer
-		if err := tmpl.Execute(&buffer, data); err != nil {
-			return nil, fmt.Errorf("failed to execute template: %w", err)
-		}
-
-		resources = buffer.String()
+	tmpl, err := template.New(m.name).
+		Option("missingkey=error").
+		Parse(resources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
 
-	return cluster.ConvertToUnstructured(resources)
-}
+	var buffer bytes.Buffer
+	if err := tmpl.Execute(&buffer, data); err != nil {
+		return nil, fmt.Errorf("failed to execute template: %w", err)
+	}
 
-func isTemplate(path string) bool {
-	return strings.Contains(filepath.Base(path), ".tmpl.")
+	return cluster.ConvertToUnstructured(buffer.String())
 }
 
 func isPatch(path string) bool {

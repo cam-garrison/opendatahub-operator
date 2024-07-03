@@ -176,7 +176,20 @@ func OwnedBy(f *Feature) cluster.MetaOptions {
 func DefaultMetaOptions(f *Feature) []cluster.MetaOptions {
 	resourceMeta := []cluster.MetaOptions{OwnedBy(f)}
 	if f.Managed {
-		resourceMeta = append(resourceMeta, cluster.WithAnnotations(annotations.ManagedByODHOperator, "true"))
+		resourceMeta = append(resourceMeta, func(obj metav1.Object) error {
+			objAnnotations := obj.GetAnnotations()
+			if objAnnotations == nil {
+				objAnnotations = make(map[string]string)
+			}
+
+			// If resource already has an annotation, leave it as defined
+			if _, exists := objAnnotations[annotations.ManagedByODHOperator]; !exists {
+				objAnnotations[annotations.ManagedByODHOperator] = "true"
+				obj.SetAnnotations(objAnnotations)
+			}
+
+			return nil
+		})
 	}
 	return resourceMeta
 }

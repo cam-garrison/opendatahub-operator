@@ -48,6 +48,9 @@ func Define(featureName string) *featureBuilder {
 		}
 
 		f.TargetNamespace = fb.targetNs
+		if setTargetNSErr := f.Set("TargetNamespace", fb.targetNs); setTargetNSErr != nil {
+			return fmt.Errorf("failed to set target namespace for '%s' feature: %w", fb.featureName, setTargetNSErr)
+		}
 
 		return nil
 	}

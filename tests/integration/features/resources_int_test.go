@@ -5,7 +5,6 @@ import (
 	"path"
 
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
@@ -22,18 +21,22 @@ import (
 
 var _ = Describe("Applying and updating resources", func() {
 	var (
-		testNamespace   string
-		namespace       *corev1.Namespace
-		objectCleaner   *envtestutil.Cleaner
-		dsci            *dsciv1.DSCInitialization
-		dummyAnnotation string
+		testNamespace string
+		namespace     *corev1.Namespace
+		objectCleaner *envtestutil.Cleaner
+		dsci          *dsciv1.DSCInitialization
+	)
+
+	const (
+		testAnnotationKey = "test-annotation"
+		newValue          = "new-value"
+		originalValue     = "original-value"
 	)
 
 	BeforeEach(func(ctx context.Context) {
 		objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
 
-		testNamespace = "test-namespace"
-		dummyAnnotation = "fake-anno"
+		testNamespace = envtestutil.AppendRandomNameTo("test-namespace")
 
 		var err error
 		namespace, err = cluster.CreateNamespace(ctx, envTestClient, testNamespace)
@@ -43,8 +46,13 @@ var _ = Describe("Applying and updating resources", func() {
 		dsci.Spec.ServiceMesh.ControlPlane.Namespace = namespace.Name
 	})
 
+	AfterEach(func(ctx context.Context) {
+		objectCleaner.DeleteAll(ctx, namespace)
+	})
+
 	When("a feature is managed", func() {
-		It("should reconcile the object to its managed state", func(ctx context.Context) {
+
+		It("should reconcile the resource to its managed state", func(ctx context.Context) {
 			// given managed feature
 			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
 				return registry.Add(
@@ -59,24 +67,75 @@ var _ = Describe("Applying and updating resources", func() {
 				)
 			})
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			defer func() {
+				if errCleanup := featuresHandler.Delete(ctx); errCleanup != nil {
+					GinkgoLogr.Info("failed to cleanup feature", "error", errCleanup)
+				}
+			}()
 
 			// expect created svc to have managed annotation
-			service := getServiceAndExpectAnnotations(ctx, envTestClient, testNamespace, "knative-local-gateway", map[string]string{
-				"example-annotation":             "",
-				annotations.ManagedByODHOperator: "true",
-			})
+			service, err := fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(service.Annotations).To(
+				HaveKeyWithValue(annotations.ManagedByODHOperator, "true"),
+			)
 
-			// modify managed service
-			modifyAndExpectUpdate(ctx, envTestClient, service, "example-annotation", dummyAnnotation)
+			// when
+			service.Annotations[testAnnotationKey] = newValue
+			Expect(envTestClient.Update(ctx, service)).To(Succeed())
 
+			// then
 			// expect that modification is reconciled away
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
-			verifyAnnotation(ctx, envTestClient, testNamespace, service.Name, "example-annotation", "")
+			updatedService, err := fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedService.Annotations).To(
+				HaveKeyWithValue(testAnnotationKey, originalValue),
+			)
 		})
+
+		It("should not reconcile explicitly opt-ed out resource", func(ctx context.Context) {
+			// given managed feature
+			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+				return registry.Add(
+					feature.Define("create-unmanaged-svc").
+						UsingConfig(envTest.Config).
+						Managed().
+						Manifests(
+							manifest.Location(fixtures.TestEmbeddedFiles).
+								Include(path.Join(fixtures.BaseDir, "unmanaged-svc.yaml")),
+						).
+						WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get)),
+				)
+			})
+			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			defer func() {
+				if errCleanup := featuresHandler.Delete(ctx); errCleanup != nil {
+					GinkgoLogr.Info("failed to cleanup feature", "error", errCleanup)
+				}
+			}()
+
+			// when
+			service, err := fixtures.GetService(ctx, envTestClient, testNamespace, "unmanaged-svc")
+			Expect(err).ToNot(HaveOccurred())
+			service.Annotations[testAnnotationKey] = newValue
+			Expect(envTestClient.Update(ctx, service)).To(Succeed())
+
+			// then
+			// expect that modification is reconciled away
+			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			updatedService, err := fixtures.GetService(ctx, envTestClient, testNamespace, "unmanaged-svc")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedService.Annotations).To(
+				HaveKeyWithValue(testAnnotationKey, newValue),
+			)
+		})
+
 	})
 
 	When("a feature is unmanaged", func() {
-		It("should not reconcile the object", func(ctx context.Context) {
+
+		It("should not reconcile the resource", func(ctx context.Context) {
 			// given unmanaged feature
 			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
 				return registry.Add(
@@ -90,20 +149,32 @@ var _ = Describe("Applying and updating resources", func() {
 				)
 			})
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			defer func() {
+				if errCleanup := featuresHandler.Delete(ctx); errCleanup != nil {
+					GinkgoLogr.Info("failed to cleanup feature", "error", errCleanup)
+				}
+			}()
 
-			// modify unmanaged service object
+			// when
 			service, err := fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
 			Expect(err).ToNot(HaveOccurred())
-			modifyAndExpectUpdate(ctx, envTestClient, service, "example-annotation", dummyAnnotation)
+			service.Annotations[testAnnotationKey] = newValue
+			Expect(envTestClient.Update(ctx, service)).To(Succeed())
 
-			// expect modification to remain after "reconcile"
+			// then
+			// expect that modification is reconciled away
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
-			verifyAnnotation(ctx, envTestClient, testNamespace, service.Name, "example-annotation", dummyAnnotation)
+			updatedService, err := fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedService.Annotations).To(
+				HaveKeyWithValue(testAnnotationKey, newValue),
+			)
+
 		})
 	})
 
 	When("a feature is unmanaged but the object is marked as managed", func() {
-		It("should reconcile this object", func(ctx context.Context) {
+		It("should reconcile this resource", func(ctx context.Context) {
 			// given unmanaged feature but object marked with managed annotation
 			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
 				return registry.Add(
@@ -117,46 +188,27 @@ var _ = Describe("Applying and updating resources", func() {
 				)
 			})
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			defer func() {
+				if errCleanup := featuresHandler.Delete(ctx); errCleanup != nil {
+					GinkgoLogr.Info("failed to cleanup feature", "error", errCleanup)
+				}
+			}()
 
-			// expect service to have managed annotation
-			service := getServiceAndExpectAnnotations(ctx, envTestClient, testNamespace, "managed-svc", map[string]string{
-				"example-annotation":             "",
-				annotations.ManagedByODHOperator: "true",
-			})
+			// when
+			service, err := fixtures.GetService(ctx, envTestClient, testNamespace, "managed-svc")
+			Expect(err).ToNot(HaveOccurred())
+			service.Annotations[testAnnotationKey] = newValue
+			Expect(envTestClient.Update(ctx, service)).To(Succeed())
 
-			// modify managed service
-			modifyAndExpectUpdate(ctx, envTestClient, service, "example-annotation", dummyAnnotation)
-
+			// then
 			// expect that modification is reconciled away
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
-			verifyAnnotation(ctx, envTestClient, testNamespace, service.Name, "example-annotation", "")
+			updatedService, err := fixtures.GetService(ctx, envTestClient, testNamespace, "managed-svc")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedService.Annotations).To(
+				HaveKeyWithValue(testAnnotationKey, originalValue),
+			)
 		})
 	})
 
-	AfterEach(func(ctx context.Context) {
-		objectCleaner.DeleteAll(ctx, namespace)
-	})
 })
-
-func getServiceAndExpectAnnotations(ctx context.Context, testClient client.Client, namespace, serviceName string, annotations map[string]string) *corev1.Service {
-	service, err := fixtures.GetService(ctx, testClient, namespace, serviceName)
-	Expect(err).ToNot(HaveOccurred())
-	for key, val := range annotations {
-		Expect(service.Annotations[key]).To(Equal(val))
-	}
-	return service
-}
-
-func modifyAndExpectUpdate(ctx context.Context, client client.Client, service *corev1.Service, annotationKey, newValue string) {
-	if service.Annotations == nil {
-		service.Annotations = make(map[string]string)
-	}
-	service.Annotations[annotationKey] = newValue
-	Expect(client.Update(ctx, service)).To(Succeed())
-}
-
-func verifyAnnotation(ctx context.Context, client client.Client, namespace, serviceName, annotationKey, expectedValue string) {
-	updatedService, err := fixtures.GetService(ctx, client, namespace, serviceName)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(updatedService.Annotations[annotationKey]).To(Equal(expectedValue))
-}
