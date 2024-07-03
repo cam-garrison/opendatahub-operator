@@ -55,6 +55,7 @@ func createFeatureTracker(ctx context.Context, f *Feature) error {
 	return nil
 }
 
+// removeFeatureTracker removes the FeatureTracker associated with the provided Feature instance if one exists in the cluster.
 func removeFeatureTracker(ctx context.Context, f *Feature) error {
 	associatedTracker := f.tracker
 	if associatedTracker == nil {
@@ -69,8 +70,6 @@ func removeFeatureTracker(ctx context.Context, f *Feature) error {
 	if associatedTracker != nil {
 		return client.IgnoreNotFound(f.Client.Delete(ctx, associatedTracker))
 	}
-
-	f.Log.Info("FeatureTracker not found, skipping deletion", "feature", f.Name)
 
 	return nil
 }

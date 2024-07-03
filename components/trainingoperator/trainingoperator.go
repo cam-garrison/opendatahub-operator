@@ -34,7 +34,7 @@ type TrainingOperator struct {
 	components.Component `json:""`
 }
 
-func (r *TrainingOperator) OverrideManifests(ctx context.Context, _ string) error {
+func (r *TrainingOperator) OverrideManifests(ctx context.Context, _ cluster.Platform) error {
 	// If devflags are set, update default manifests path
 	if len(r.DevFlags.Manifests) != 0 {
 		manifestConfig := r.DevFlags.Manifests[0]
@@ -71,7 +71,7 @@ func (r *TrainingOperator) ReconcileComponent(ctx context.Context, cli client.Cl
 	if enabled {
 		if r.DevFlags != nil {
 			// Download manifests and update paths
-			if err := r.OverrideManifests(ctx, string(platform)); err != nil {
+			if err := r.OverrideManifests(ctx, platform); err != nil {
 				return err
 			}
 		}
