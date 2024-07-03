@@ -215,7 +215,6 @@ func (r *DSCInitializationReconciler) authorizationFeatures(dsci *dsciv1.DSCInit
 			// enabled instead, otherwise it will not have proxy pod injected.
 			feature.Define("enable-proxy-injection-in-authorino-deployment").
 				PreConditions(
-					servicemesh.EnsureAuthNamespaceExists,
 					func(ctx context.Context, f *feature.Feature) error {
 						return feature.WaitForPodsToBeReady(serviceMeshSpec.Auth.Namespace)(ctx, f)
 					},

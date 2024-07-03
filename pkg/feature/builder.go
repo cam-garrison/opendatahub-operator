@@ -58,15 +58,16 @@ func Define(featureName string) *featureBuilder {
 	return fb
 }
 
-// TargetNamespace sets the namespace in which the feature should be applied.
-func (fb *featureBuilder) TargetNamespace(targetNs string) *featureBuilder {
-	fb.targetNs = targetNs
+func (fb *featureBuilder) Source(source featurev1.Source) *featureBuilder {
+	fb.source = source
 
 	return fb
 }
 
-func (fb *featureBuilder) Source(source featurev1.Source) *featureBuilder {
-	fb.source = source
+// TargetNamespace sets the namespace in which the feature should be applied.
+// If not set, the feature will be applied in the application namespace (where this operator lives).
+func (fb *featureBuilder) TargetNamespace(targetNs string) *featureBuilder {
+	fb.targetNs = targetNs
 
 	return fb
 }

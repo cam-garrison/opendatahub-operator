@@ -64,6 +64,8 @@ type Action func(ctx context.Context, f *Feature) error
 // EnabledFunc is a func type used to determine if a feature should be enabled.
 type EnabledFunc func(ctx context.Context, feature *Feature) (bool, error)
 
+// Apply applies the feature to the cluster.
+// It creates a FeatureTracker resource to establish ownership and reports the result of the operation as a condition.
 func (f *Feature) Apply(ctx context.Context) error {
 	// If the feature is disabled, but the FeatureTracker exists in the cluster, ensure clean-up is triggered.
 	// This means that the feature was previously enabled, but now it is not anymore.
@@ -158,6 +160,7 @@ func (f *Feature) applyFeature(ctx context.Context) error {
 	return nil
 }
 
+// AsOwnerReference returns an OwnerReference for the FeatureTracker resource.
 // AsOwnerReference returns an OwnerReference for the FeatureTracker resource.
 func (f *Feature) AsOwnerReference() metav1.OwnerReference {
 	return f.tracker.ToOwnerReference()

@@ -242,7 +242,7 @@ var _ = Describe("Service Mesh setup", func() {
 					// then
 					By("verifying that extension provider has been removed and namespace is gone too", func() {
 						Expect(handler.Delete(ctx)).To(Succeed())
-						Eventually(func() []any {
+						Eventually(func(ctx context.Context) []any {
 
 							serviceMeshControlPlane, err := getServiceMeshControlPlane(ctx, namespace, name)
 							Expect(err).ToNot(HaveOccurred())
@@ -256,7 +256,11 @@ var _ = Describe("Service Mesh setup", func() {
 
 							return extensionProviders
 
-						}).WithTimeout(fixtures.Timeout).WithPolling(fixtures.Interval).Should(BeEmpty())
+						}).
+							WithTimeout(fixtures.Timeout).
+							WithPolling(fixtures.Interval).
+							WithContext(ctx).
+							Should(BeEmpty())
 					})
 
 				})
