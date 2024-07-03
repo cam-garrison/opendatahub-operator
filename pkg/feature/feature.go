@@ -161,7 +161,6 @@ func (f *Feature) applyFeature(ctx context.Context) error {
 }
 
 // AsOwnerReference returns an OwnerReference for the FeatureTracker resource.
-// AsOwnerReference returns an OwnerReference for the FeatureTracker resource.
 func (f *Feature) AsOwnerReference() metav1.OwnerReference {
 	return f.tracker.ToOwnerReference()
 }

@@ -208,8 +208,10 @@ func (r *DSCInitializationReconciler) authorizationFeatures(dsci *dsciv1.DSCInit
 				OnDelete(
 					servicemesh.RemoveExtensionProvider,
 				),
+
 			// We do not have the control over deployment resource creation.
 			// It is created by Authorino operator using Authorino CR and labels are not propagated from Authorino CR to spec.template
+			// See https://issues.redhat.com/browse/RHOAIENG-5494
 			//
 			// To make it part of Service Mesh we have to patch it with injection
 			// enabled instead, otherwise it will not have proxy pod injected.
