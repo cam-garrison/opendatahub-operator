@@ -103,7 +103,7 @@ var _ = Describe("Applying and updating resources", func() {
 						Managed().
 						Manifests(
 							manifest.Location(fixtures.TestEmbeddedFiles).
-								Include(path.Join(fixtures.BaseDir, "unmanaged-svc.yaml")),
+								Include(path.Join(fixtures.BaseDir, "unmanaged-svc.tmpl.yaml")),
 						).
 						WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get)),
 				)
@@ -124,6 +124,7 @@ var _ = Describe("Applying and updating resources", func() {
 			// then
 			// expect that modification is reconciled away
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+
 			updatedService, err := fixtures.GetService(ctx, envTestClient, testNamespace, "unmanaged-svc")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedService.Annotations).To(
@@ -182,7 +183,7 @@ var _ = Describe("Applying and updating resources", func() {
 						UsingConfig(envTest.Config).
 						Manifests(
 							manifest.Location(fixtures.TestEmbeddedFiles).
-								Include(path.Join(fixtures.BaseDir, "managed-svc.yaml")),
+								Include(path.Join(fixtures.BaseDir, "managed-svc.tmpl.yaml")),
 						).
 						WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get)),
 				)
