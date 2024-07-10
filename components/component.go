@@ -45,7 +45,7 @@ func (c *Component) GetManagementState() operatorv1.ManagementState {
 	return c.ManagementState
 }
 
-func (c *Component) Cleanup(_ context.Context, _ client.Client, _ *dsciv1.DSCInitializationSpec) error {
+func (c *Component) Cleanup(_ context.Context, _ client.Client, _ metav1.Object, _ *dsciv1.DSCInitializationSpec) error {
 	// noop
 	return nil
 }
@@ -82,7 +82,7 @@ type ManifestsConfig struct {
 type ComponentInterface interface {
 	ReconcileComponent(ctx context.Context, cli client.Client, logger logr.Logger,
 		owner metav1.Object, DSCISpec *dsciv1.DSCInitializationSpec, platform cluster.Platform, currentComponentStatus bool, c capabilities.PlatformCapabilities) error
-	Cleanup(ctx context.Context, cli client.Client, DSCISpec *dsciv1.DSCInitializationSpec) error
+	Cleanup(ctx context.Context, cli client.Client, owner metav1.Object, DSCISpec *dsciv1.DSCInitializationSpec) error
 	GetComponentName() string
 	GetManagementState() operatorv1.ManagementState
 	OverrideManifests(ctx context.Context, platform cluster.Platform) error

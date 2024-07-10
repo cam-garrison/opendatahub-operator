@@ -31,7 +31,16 @@ var _ = Describe("feature preconditions", func() {
 
 			testFeatureName := "test-ns-creation"
 			namespace = envtestutil.AppendRandomNameTo(testFeatureName)
+
 			dsci = fixtures.NewDSCInitialization(namespace)
+			err := fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+			dsci.APIVersion = fixtures.DsciAPIVersion
+			dsci.Kind = fixtures.DsciKind
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func(ctx context.Context) {
+			objectCleaner.DeleteAll(ctx, fixtures.NewNamespace(namespace), dsci)
 		})
 
 		It("should create namespace if it does not exist", func(ctx context.Context) {

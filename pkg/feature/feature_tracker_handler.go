@@ -11,6 +11,7 @@ import (
 
 	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/controllers/status"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 )
 
 // withConditionReasonError is a wrapper around an error which provides a reason for a feature condition.
@@ -48,6 +49,18 @@ func createFeatureTracker(ctx context.Context, f *Feature) error {
 
 	if gvkErr := ensureGVKSet(tracker, f.Client.Scheme()); gvkErr != nil {
 		return gvkErr
+	}
+
+	if f.owner != nil {
+		reference, err := cluster.ToOwnerReference(f.owner)
+		if err != nil {
+			return err
+		}
+
+		tracker.SetOwnerReferences(reference)
+		if err = f.Client.Update(ctx, tracker); err != nil {
+			return err
+		}
 	}
 
 	f.tracker = tracker

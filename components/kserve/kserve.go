@@ -110,18 +110,17 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 	monitoringEnabled := dscispec.Monitoring.ManagementState == operatorv1.Managed
 
 	if !enabled {
-		if err := k.removeServerlessFeatures(ctx, dscispec); err != nil {
+		if err := k.removeServerlessFeatures(ctx, owner, dscispec); err != nil {
 			return err
 		}
 	} else {
 		// Configure dependencies
-		if err := k.configureServerless(ctx, dscispec); err != nil {
-			return err
-		}
-		if k.DevFlags != nil {
-			// Download manifests and update paths
-			if err := k.OverrideManifests(ctx, platform); err != nil {
-				return err
+		if err := k.configureServerless(ctx, owner, dscispec); err != nil {
+			if k.DevFlags != nil {
+				// Download manifests and update paths
+				if err := k.OverrideManifests(ctx, platform); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -133,7 +132,7 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 		}
 	}
 
-	if err := k.configureServiceMesh(ctx, cli, dscispec); err != nil {
+	if err := k.configureServiceMesh(ctx, cli, owner, dscispec); err != nil {
 		return fmt.Errorf("failed configuring service mesh while reconciling kserve component. cause: %w", err)
 	}
 
@@ -186,10 +185,10 @@ func (k *Kserve) ReconcileComponent(ctx context.Context, cli client.Client,
 	return nil
 }
 
-func (k *Kserve) Cleanup(ctx context.Context, cli client.Client, instance *dsciv1.DSCInitializationSpec) error {
-	if removeServerlessErr := k.removeServerlessFeatures(ctx, instance); removeServerlessErr != nil {
+func (k *Kserve) Cleanup(ctx context.Context, cli client.Client, owner metav1.Object, instance *dsciv1.DSCInitializationSpec) error {
+	if removeServerlessErr := k.removeServerlessFeatures(ctx, owner, instance); removeServerlessErr != nil {
 		return removeServerlessErr
 	}
 
-	return k.removeServiceMeshConfigurations(ctx, cli, instance)
+	return k.removeServiceMeshConfigurations(ctx, cli, owner, instance)
 }

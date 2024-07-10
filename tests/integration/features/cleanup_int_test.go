@@ -22,7 +22,7 @@ import (
 
 var _ = Describe("feature cleanup", func() {
 
-	Context("using FeatureTracker and ownership as cleanup strategy", Ordered, func() {
+	Context("using FeatureTracker and ownership as cleanup strategy", func() {
 
 		const (
 			featureName = "create-secret"
@@ -35,7 +35,7 @@ var _ = Describe("feature cleanup", func() {
 			testFeature *feature.Feature
 		)
 
-		BeforeAll(func() {
+		BeforeEach(func() {
 			namespace = envtestutil.AppendRandomNameTo("test-secret-ownership")
 			dsci = fixtures.NewDSCInitialization(namespace)
 			var errSecretCreation error
@@ -140,7 +140,6 @@ var _ = Describe("feature cleanup", func() {
 			err := envTestClient.Delete(context.Background(), fixtures.NewNamespace(additionalNs))
 			Expect(err).To(Not(HaveOccurred()))
 
-			// Mimic reconcile by re-loading the feature handler
 			feature, conditionalCreationErr := feature.Define(featureName).
 				UsingConfig(envTest.Config).
 				TargetNamespace(nsName).
@@ -148,8 +147,8 @@ var _ = Describe("feature cleanup", func() {
 				WithResources(fixtures.CreateSecret(secretName, nsName)).
 				Create()
 
+			// Mimic reconcile by re-applying the feature
 			Expect(conditionalCreationErr).ToNot(HaveOccurred())
-
 			Expect(feature.Apply(ctx)).Should(Succeed())
 
 			// then

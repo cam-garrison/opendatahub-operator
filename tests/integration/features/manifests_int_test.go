@@ -40,10 +40,14 @@ var _ = Describe("Applying resources", func() {
 
 		dsci = fixtures.NewDSCInitialization(nsName)
 		dsci.Spec.ServiceMesh.ControlPlane.Namespace = namespace.Name
+		err = fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		Expect(err).ToNot(HaveOccurred())
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
 	})
 
 	AfterEach(func(ctx context.Context) {
-		objectCleaner.DeleteAll(ctx, namespace)
+		objectCleaner.DeleteAll(ctx, namespace, dsci)
 	})
 
 	It("should be able to process an embedded YAML file", func(ctx context.Context) {

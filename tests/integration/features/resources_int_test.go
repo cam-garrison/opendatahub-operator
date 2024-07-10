@@ -2,9 +2,9 @@ package features_test
 
 import (
 	"context"
-	"path"
-
+	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
 	corev1 "k8s.io/api/core/v1"
+	"path"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
@@ -21,10 +21,11 @@ import (
 
 var _ = Describe("Applying and updating resources", func() {
 	var (
-		testNamespace string
-		namespace     *corev1.Namespace
-		objectCleaner *envtestutil.Cleaner
-		dsci          *dsciv1.DSCInitialization
+		testNamespace  string
+		namespace      *corev1.Namespace
+		istioNamespace *corev1.Namespace
+		objectCleaner  *envtestutil.Cleaner
+		dsci           *dsciv1.DSCInitialization
 	)
 
 	const (
@@ -41,44 +42,60 @@ var _ = Describe("Applying and updating resources", func() {
 		var err error
 		namespace, err = cluster.CreateNamespace(ctx, envTestClient, testNamespace)
 		Expect(err).ToNot(HaveOccurred())
+		istioNamespace, err = cluster.CreateNamespace(ctx, envTestClient, "istio-system")
+		Expect(err).ToNot(HaveOccurred())
 
 		dsci = fixtures.NewDSCInitialization(testNamespace)
 		dsci.Spec.ServiceMesh.ControlPlane.Namespace = namespace.Name
+		err = fixtures.CreateOrUpdateDsci(envTestClient, dsci)
+		dsci.APIVersion = fixtures.DsciAPIVersion
+		dsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func(ctx context.Context) {
-		objectCleaner.DeleteAll(ctx, namespace)
+		objectCleaner.DeleteAll(ctx, namespace, istioNamespace, dsci)
 	})
 
 	When("a feature is managed", func() {
 
 		It("should reconcile the resource to its managed state", func(ctx context.Context) {
 			// given managed feature
-			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
-				return registry.Add(
-					feature.Define("create-local-gw-svc").
-						UsingConfig(envTest.Config).
-						Managed().
-						Manifests(
-							manifest.Location(fixtures.TestEmbeddedFiles).
-								Include(path.Join(fixtures.BaseDir, "local-gateway-svc.tmpl.yaml")),
-						).
-						WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get)),
-				)
-			})
-			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			feature, featErr := feature.Define("create-local-gw-svc").
+				UsingConfig(envTest.Config).
+				Source(featurev1.Source{
+					Type: featurev1.DSCIType,
+					Name: dsci.Name,
+				}).
+				TargetNamespace(testNamespace).
+				Managed().
+				Manifests(
+					manifest.Location(fixtures.TestEmbeddedFiles).
+						Include(path.Join(fixtures.BaseDir, "local-gateway-svc.tmpl.yaml")),
+				).
+				WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get)).
+				Create()
+
+			Expect(featErr).ToNot(HaveOccurred())
+			Expect(feature.Apply(ctx)).To(Succeed())
 			defer func() {
-				if errCleanup := featuresHandler.Delete(ctx); errCleanup != nil {
+				if errCleanup := feature.Cleanup(ctx); errCleanup != nil {
 					GinkgoLogr.Info("failed to cleanup feature", "error", errCleanup)
 				}
 			}()
 
 			// expect created svc to have managed annotation
-			service, err := fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(service.Annotations).To(
-				HaveKeyWithValue(annotations.ManagedByODHOperator, "true"),
-			)
+			var service *corev1.Service
+			Eventually(func(g Gomega) {
+				var err error
+				service, err = fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
+				g.Expect(err).ToNot(HaveOccurred())
+				Expect(service.Annotations).To(
+					HaveKeyWithValue(annotations.ManagedByODHOperator, "true"),
+				)
+			}).WithTimeout(2 * fixtures.Timeout).
+				WithPolling(fixtures.Interval).
+				Should(Succeed())
 
 			// when
 			service.Annotations[testAnnotationKey] = newValue
@@ -86,7 +103,7 @@ var _ = Describe("Applying and updating resources", func() {
 
 			// then
 			// expect that modification is reconciled away
-			Expect(featuresHandler.Apply(ctx)).To(Succeed())
+			Expect(feature.Apply(ctx)).To(Succeed())
 			updatedService, err := fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedService.Annotations).To(

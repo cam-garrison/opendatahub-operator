@@ -8,6 +8,7 @@ import (
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/dscinitialization/v1"
@@ -115,24 +116,23 @@ func (k *Kserve) setDefaultDeploymentMode(ctx context.Context, cli client.Client
 	return nil
 }
 
-func (k *Kserve) configureServerless(ctx context.Context, instance *dsciv1.DSCInitializationSpec) error {
+func (k *Kserve) configureServerless(ctx context.Context, owner metav1.Object, instance *dsciv1.DSCInitializationSpec) error {
 	switch k.Serving.ManagementState {
 	case operatorv1.Unmanaged: // Bring your own CR
 		fmt.Println("Serverless CR is not configured by the operator, we won't do anything")
 
 	case operatorv1.Removed: // we remove serving CR
 		fmt.Println("existing Serverless CR (owned by operator) will be removed")
-		if err := k.removeServerlessFeatures(ctx, instance); err != nil {
+		if err := k.removeServerlessFeatures(ctx, owner, instance); err != nil {
 			return err
 		}
-
 	case operatorv1.Managed: // standard workflow to create CR
 		switch instance.ServiceMesh.ManagementState {
 		case operatorv1.Unmanaged, operatorv1.Removed:
 			return errors.New("ServiceMesh is need to set to 'Managed' in DSCI CR, it is required by KServe serving field")
 		}
 
-		serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), instance.ApplicationsNamespace, k.configureServerlessFeatures(instance))
+		serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), instance.ApplicationsNamespace, owner, k.configureServerlessFeatures(instance))
 
 		if err := serverlessFeatures.Apply(ctx); err != nil {
 			return err
@@ -141,8 +141,8 @@ func (k *Kserve) configureServerless(ctx context.Context, instance *dsciv1.DSCIn
 	return nil
 }
 
-func (k *Kserve) removeServerlessFeatures(ctx context.Context, instance *dsciv1.DSCInitializationSpec) error {
-	serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), instance.ApplicationsNamespace, k.configureServerlessFeatures(instance))
+func (k *Kserve) removeServerlessFeatures(ctx context.Context, owner metav1.Object, instance *dsciv1.DSCInitializationSpec) error {
+	serverlessFeatures := feature.ComponentFeaturesHandler(k.GetComponentName(), instance.ApplicationsNamespace, owner, k.configureServerlessFeatures(instance))
 
 	return serverlessFeatures.Delete(ctx)
 }

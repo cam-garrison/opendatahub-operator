@@ -32,7 +32,7 @@ type Availability interface {
 
 type PlatformRegistry interface {
 	Save(ctx context.Context, cli client.Client, metaOptions ...cluster.MetaOptions) error
-	ConfigureCapabilities(ctx context.Context, cli client.Client, dsciSpec *dsciv1.DSCInitializationSpec, metaOptions ...cluster.MetaOptions) error
+	ConfigureCapabilities(ctx context.Context, cli client.Client, owner metav1.Object, dsciSpec *dsciv1.DSCInitializationSpec, metaOptions ...cluster.MetaOptions) error
 	// RemoveCapabilities(context.Context, client.Client, *dsciv1.DSCInitializationSpec) error
 	// authz: apply authorino setup
 	// TODO(after-mvp): when KServe onboarded move authz setup from DSCI controller here
@@ -51,7 +51,11 @@ type Registry struct {
 }
 
 // TODO: include OwnedBy for DSC clean up, both Registry and Handler.
-func (r *Registry) ConfigureCapabilities(ctx context.Context, cli client.Client, dsciSpec *dsciv1.DSCInitializationSpec, metaOptions ...cluster.MetaOptions) error {
+func (r *Registry) ConfigureCapabilities(ctx context.Context,
+	cli client.Client,
+	owner metav1.Object,
+	dsciSpec *dsciv1.DSCInitializationSpec,
+	metaOptions ...cluster.MetaOptions) error {
 	// TODO(mvp): make it a dynamic slice
 	handlers := []Handler{&r.authorization}
 
@@ -73,6 +77,7 @@ func (r *Registry) ConfigureCapabilities(ctx context.Context, cli client.Client,
 	platformFeatures := feature.NewFeaturesHandler(
 		dsciSpec.ApplicationsNamespace,
 		featurev1.Source{Type: featurev1.PlatformCapabilityType, Name: "authorization"},
+		owner,
 		r.definePlatformDeployment(isRequired(handlers...)),
 	)
 

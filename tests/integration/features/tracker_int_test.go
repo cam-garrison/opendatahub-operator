@@ -11,6 +11,7 @@ import (
 	featurev1 "github.com/opendatahub-io/opendatahub-operator/v2/apis/features/v1"
 	"github.com/opendatahub-io/opendatahub-operator/v2/controllers/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/feature"
+	"github.com/opendatahub-io/opendatahub-operator/v2/tests/envtestutil"
 	"github.com/opendatahub-io/opendatahub-operator/v2/tests/integration/features/fixtures"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -23,17 +24,28 @@ var _ = Describe("Feature tracking capability", func() {
 	const appNamespace = "default"
 
 	var (
-		dsci *dsciv1.DSCInitialization
+		trackerDsci   *dsciv1.DSCInitialization
+		objectCleaner *envtestutil.Cleaner
 	)
 
 	BeforeEach(func() {
-		dsci = fixtures.NewDSCInitialization("default")
+		objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
+
+		trackerDsci = fixtures.NewDSCInitialization(appNamespace)
+		err := fixtures.CreateOrUpdateDsci(envTestClient, trackerDsci)
+		trackerDsci.APIVersion = fixtures.DsciAPIVersion
+		trackerDsci.Kind = fixtures.DsciKind
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func(ctx context.Context) {
+		objectCleaner.DeleteAll(ctx, trackerDsci)
 	})
 
 	Context("Reporting progress when applying Feature", func() {
 
 		It("should indicate successful installation in FeatureTracker through Status conditions", func(ctx context.Context) {
-			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ClusterFeaturesHandler(trackerDsci, func(registry feature.FeaturesRegistry) error {
 				verificationFeatureErr := registry.Add(
 					feature.Define("always-working-feature").
 						UsingConfig(envTest.Config),
@@ -62,7 +74,7 @@ var _ = Describe("Feature tracking capability", func() {
 
 		It("should indicate when failure occurs in preconditions through Status conditions", func(ctx context.Context) {
 			// given
-			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ClusterFeaturesHandler(trackerDsci, func(registry feature.FeaturesRegistry) error {
 				verificationFeatureErr := registry.Add(feature.Define("precondition-fail").
 					UsingConfig(envTest.Config).
 					PreConditions(func(_ context.Context, _ *feature.Feature) error {
@@ -93,7 +105,7 @@ var _ = Describe("Feature tracking capability", func() {
 
 		It("should indicate when failure occurs in post-conditions through Status conditions", func(ctx context.Context) {
 			// given
-			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ClusterFeaturesHandler(trackerDsci, func(registry feature.FeaturesRegistry) error {
 				verificationFeatureErr := registry.Add(feature.Define("post-condition-failure").
 					UsingConfig(envTest.Config).
 					PostConditions(func(_ context.Context, _ *feature.Feature) error {
@@ -127,7 +139,7 @@ var _ = Describe("Feature tracking capability", func() {
 
 		It("should correctly indicate source in the feature tracker", func(ctx context.Context) {
 			// given
-			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ClusterFeaturesHandler(trackerDsci, func(registry feature.FeaturesRegistry) error {
 				emptyFeatureErr := registry.Add(feature.Define("always-working-feature").
 					UsingConfig(envTest.Config),
 				)
@@ -153,7 +165,7 @@ var _ = Describe("Feature tracking capability", func() {
 
 		It("should correctly indicate app namespace in the feature tracker", func(ctx context.Context) {
 			// given
-			featuresHandler := feature.ClusterFeaturesHandler(dsci, func(registry feature.FeaturesRegistry) error {
+			featuresHandler := feature.ClusterFeaturesHandler(trackerDsci, func(registry feature.FeaturesRegistry) error {
 				emptyFeatureErr := registry.Add(feature.Define("empty-feature").
 					UsingConfig(envTest.Config),
 				)
@@ -169,7 +181,7 @@ var _ = Describe("Feature tracking capability", func() {
 			// then
 			featureTracker, err := fixtures.GetFeatureTracker(ctx, envTestClient, appNamespace, "empty-feature")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(featureTracker.Spec.AppNamespace).To(Equal("default"))
+			Expect(featureTracker.Spec.AppNamespace).To(Equal(appNamespace))
 		})
 
 	})
