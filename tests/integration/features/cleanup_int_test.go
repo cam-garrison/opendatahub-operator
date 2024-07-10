@@ -29,18 +29,18 @@ var _ = Describe("feature cleanup", func() {
 		)
 
 		var (
-			dsci          *dsciv1.DSCInitialization
-			namespace     string
-			ns            *corev1.Namespace
-			testFeature   *feature.Feature
-			objectCleaner *envtestutil.Cleaner
+			dsci             *dsciv1.DSCInitialization
+			cleanupNamespace string
+			ns               *corev1.Namespace
+			testFeature      *feature.Feature
+			objectCleaner    *envtestutil.Cleaner
 		)
 
 		BeforeAll(func() {
 			objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
-			namespace = envtestutil.AppendRandomNameTo("test-secret-ownership")
-			ns = fixtures.NewNamespace(namespace)
-			dsci = fixtures.NewDSCInitialization(namespace)
+			cleanupNamespace = envtestutil.AppendRandomNameTo("test-secret-ownership")
+			ns = fixtures.NewNamespace(cleanupNamespace)
+			dsci = fixtures.NewDSCInitialization(cleanupNamespace)
 			err := fixtures.CreateOrUpdateDsci(envTestClient, dsci)
 			Expect(err).ToNot(HaveOccurred())
 			dsci.APIVersion = fixtures.DsciAPIVersion
@@ -54,9 +54,9 @@ var _ = Describe("feature cleanup", func() {
 				}).
 				UsingConfig(envTest.Config).
 				PreConditions(
-					feature.CreateNamespaceIfNotExists(namespace),
+					feature.CreateNamespaceIfNotExists(cleanupNamespace),
 				).
-				WithResources(fixtures.CreateSecret(secretName, namespace)).
+				WithResources(fixtures.CreateSecret(secretName, cleanupNamespace)).
 				Create()
 
 			Expect(errSecretCreation).ToNot(HaveOccurred())
@@ -72,7 +72,7 @@ var _ = Describe("feature cleanup", func() {
 			Expect(testFeature.Apply(ctx)).Should(Succeed())
 
 			// then
-			Eventually(createdSecretHasOwnerReferenceToOwningFeature(namespace, featureName)).
+			Eventually(createdSecretHasOwnerReferenceToOwningFeature(cleanupNamespace, featureName)).
 				WithContext(ctx).
 				WithTimeout(fixtures.Timeout).
 				WithPolling(fixtures.Interval).
@@ -84,7 +84,7 @@ var _ = Describe("feature cleanup", func() {
 			Expect(testFeature.Cleanup(ctx)).To(Succeed())
 
 			// then
-			Consistently(createdSecretHasOwnerReferenceToOwningFeature(namespace, featureName)).
+			Consistently(createdSecretHasOwnerReferenceToOwningFeature(cleanupNamespace, featureName)).
 				WithContext(ctx).
 				WithTimeout(fixtures.Timeout).
 				WithPolling(fixtures.Interval).

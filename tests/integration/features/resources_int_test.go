@@ -33,7 +33,7 @@ var _ = Describe("Applying and updating resources", func() {
 	BeforeEach(func(ctx context.Context) {
 		objectCleaner = envtestutil.CreateCleaner(envTestClient, envTest.Config, fixtures.Timeout, fixtures.Interval)
 
-		testNamespace = "test-namespace"
+		testNamespace = envtestutil.AppendRandomNameTo("test-namespace")
 		dummyAnnotation = "fake-anno"
 
 		var err error
@@ -68,10 +68,18 @@ var _ = Describe("Applying and updating resources", func() {
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
 
 			// expect created svc to have managed annotation
-			service := getServiceAndExpectAnnotations(ctx, envTestClient, testNamespace, "knative-local-gateway", map[string]string{
-				"example-annotation":             "",
-				annotations.ManagedByODHOperator: "true",
-			})
+			var service *corev1.Service
+			Eventually(func(g Gomega) {
+				var err error
+				service, err = fixtures.GetService(ctx, envTestClient, testNamespace, "knative-local-gateway")
+				g.Expect(err).ToNot(HaveOccurred())
+				for key, val := range map[string]string{
+					"example-annotation":             "",
+					annotations.ManagedByODHOperator: "true",
+				} {
+					g.Expect(service.Annotations[key]).To(Equal(val))
+				}
+			}).Should(Succeed())
 
 			// modify managed service
 			modifyAndExpectUpdate(ctx, envTestClient, service, "example-annotation", dummyAnnotation)
@@ -118,9 +126,10 @@ var _ = Describe("Applying and updating resources", func() {
 						UsingConfig(envTest.Config).
 						Manifests(
 							manifest.Location(fixtures.TestEmbeddedFiles).
-								Include(path.Join(fixtures.BaseDir, "managed-svc.yaml")),
+								Include(path.Join(fixtures.BaseDir, "managed-svc.tmpl.yaml")),
 						).
-						WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get)),
+						WithData(feature.Entry("ControlPlane", provider.ValueOf(dsci.Spec.ServiceMesh.ControlPlane).Get),
+							feature.Entry("TargetNamespace", provider.ValueOf(testNamespace).Get)),
 				)
 			})
 			Expect(featuresHandler.Apply(ctx)).To(Succeed())
